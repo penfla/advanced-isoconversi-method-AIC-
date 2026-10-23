@@ -1,0 +1,3561 @@
+<!--
+SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+Copyright (c) 2025-2026 Flavio Pendolino
+https://polyformproject.org/licenses/noncommercial/1.0.0
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vyazovkin Method v3.10 — Epoxy Cure Kinetics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.2/dist/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;1,300&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:      #f4f6f8;
+    --surface: #ffffff;
+    --panel:   #fbfcfd;
+    --border:  #dde3ea;
+    --border2: #eef1f5;
+    --accent:  #0d8a70;
+    --accent-s:#e3f5f0;
+    --accent2: #cf4b18;
+    --accent3: #3457d5;
+    --warn:    #b7791f;
+    --text:    #1b2530;
+    --muted:   #6b7684;
+    --mono:    'JetBrains Mono', ui-monospace, monospace;
+    --sans:    'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+  header { border-bottom: 1px solid var(--border); padding: 14px 26px; display: flex; align-items: center; gap: 16px; background: var(--surface); flex-wrap: wrap; }
+  header h1 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  header p  { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .hdr-menu { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .menu-btn { background: var(--panel); border: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .06em; padding: 5px 11px; border-radius: 3px; cursor: pointer; transition: all .15s; }
+  .menu-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-s); }
+  .dirty-dot { display: none; font-family: var(--mono); font-size: 10px; color: var(--accent2); letter-spacing: .06em; }
+  .badge { background: var(--accent-s); border: 1px solid var(--accent); color: var(--accent); font-family: var(--mono); font-size: 10px; padding: 4px 10px; border-radius: 3px; letter-spacing: .08em; white-space: nowrap; }
+
+  .layout { display: grid; grid-template-columns: 355px 1fr; min-height: calc(100vh - 53px); }
+
+  /* SIDEBAR */
+  .sidebar { border-right: 1px solid var(--border); padding: 18px 16px; overflow-y: auto; background: var(--surface); }
+  .section-title { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 11px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+  .param-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+  .param-row label { font-size: 12px; color: var(--text); flex: 1; }
+  .param-row input[type="number"] { width: 82px; background: var(--panel); border: 1px solid var(--border); color: var(--accent); font-family: var(--mono); font-size: 12px; padding: 5px 8px; border-radius: 3px; text-align: right; outline: none; transition: border-color .2s; }
+  .param-row input:focus { border-color: var(--accent); }
+
+  .mode-toggle { display: flex; gap: 5px; margin-bottom: 16px; }
+  .mode-btn { flex: 1; padding: 8px 6px; font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; border-radius: 3px; transition: all .15s; text-align: center; }
+  .mode-btn.active { background: var(--accent-s); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+  #fileSection { display: none; }
+  #fileSection.visible { display: block; }
+  #simSection.hidden { display: none; }
+
+  .scan-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; min-height: 40px; }
+  .scan-row { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; padding: 8px 10px; }
+  .scan-row-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .scan-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .scan-on { accent-color: var(--accent); margin: 0; cursor: pointer; flex-shrink: 0; }
+  .scan-row.off { opacity: .55; background: repeating-linear-gradient(45deg, var(--panel), var(--panel) 6px, var(--bg) 6px, var(--bg) 12px); }
+  .scan-row.off .scan-name { text-decoration: line-through; }
+  .scan-count { font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: right; padding-top: 2px; display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+  .scan-name { font-family: var(--mono); font-size: 10px; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
+  .scan-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; transition: color .15s; }
+  .scan-remove:hover { color: var(--accent2); }
+  .scan-row-inputs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .scan-row-inputs label { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .scan-row-inputs input[type="number"] { width: 66px; background: var(--surface); border: 1px solid var(--border); color: var(--accent2); font-family: var(--mono); font-size: 11px; padding: 3px 6px; border-radius: 3px; text-align: right; outline: none; }
+  .scan-nrows { font-family: var(--mono); font-size: 9px; color: var(--accent); margin-left: auto; }
+  .scan-meta { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 5px; line-height: 1.6; }
+  .scan-meta b { color: var(--accent3); font-weight: 500; }
+  .auto-tag { background: var(--accent-s); color: var(--accent); border-radius: 2px; padding: 0 4px; }
+
+  .add-file-btn { width: 100%; background: var(--panel); border: 1px dashed var(--border); color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 10px; cursor: pointer; border-radius: 3px; text-align: center; transition: all .15s; }
+  .add-file-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-s); }
+
+  .format-hint { margin-top: 10px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent3); border-radius: 3px; }
+  .format-hint p { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.85; }
+  .format-hint code { color: var(--accent3); }
+  .format-hint .col-ok { color: var(--accent); }
+
+  .parse-error { background: #fdf0eb; border: 1px solid #f0c0aa; color: #a83c12; font-family: var(--mono); font-size: 11px; padding: 10px 14px; border-radius: 3px; margin-top: 10px; display: none; }
+  .parse-error.visible { display: block; }
+
+  .beta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 16px; }
+  .beta-item { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; }
+  .beta-item label { font-size: 11px; color: var(--muted); font-family: var(--mono); flex:1; }
+  .beta-item input { width: 54px; background: transparent; border: none; color: var(--accent2); font-family: var(--mono); font-size: 12px; text-align: right; outline: none; }
+
+  .run-btn { width: 100%; background: var(--accent); color: #fff; border: none; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; padding: 12px; cursor: pointer; border-radius: 3px; margin-top: 16px; transition: opacity .15s, transform .1s; }
+  .run-btn:hover { opacity: .88; }
+  .run-btn:active { transform: scale(.98); }
+  .run-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .switch-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .switch-row input { accent-color: var(--accent); }
+
+  .info-box { margin-top: 14px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent3); border-radius: 3px; }
+  .info-box p { font-size: 11px; color: var(--muted); line-height: 1.75; }
+  .info-box code { font-family: var(--mono); color: var(--accent3); font-size: 10px; }
+
+  /* MAIN */
+  .main { padding: 22px 26px; overflow-y: auto; }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 16px; }
+  .chart-card.wide { grid-column: 1 / -1; }
+  .chart-label { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .chart-label span { color: var(--accent); font-size: 11px; }
+  canvas { width: 100% !important; }
+
+  .results-section { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 18px; margin-bottom: 22px; }
+  .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
+  .results-header h3 { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .download-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .dl-btn { background: var(--panel); border: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: 10px; padding: 5px 12px; border-radius: 3px; cursor: pointer; letter-spacing: .06em; transition: all .15s; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .dl-btn.tsv:hover { border-color: var(--accent3); color: var(--accent3); }
+  .dl-btn.clip:hover { border-color: var(--warn); color: var(--warn); }
+
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
+  th { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; font-weight: 500; white-space: nowrap; }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--border2); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--panel); }
+  .td-n  { color: var(--text); }
+  .td-ea { color: var(--accent); font-weight: 600; }
+  .td-kas { color: var(--accent2); }
+
+  .eq-box { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent2); padding: 12px 16px; margin-bottom: 18px; font-family: var(--mono); font-size: 11px; line-height: 2; border-radius: 4px; }
+  .eq-box .eq-main { font-size: 13px; color: var(--accent2); }
+  .eq-box .eq-note { font-size: 10px; color: var(--muted); }
+
+  .phase-strip { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .phase-pill { display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); padding: 5px 12px; border-radius: 3px; font-size: 11px; }
+  .phase-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  .raw-section { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 18px; margin-bottom: 22px; }
+  .raw-section h3 { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .raw-tabs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+  .raw-tab { font-family: var(--mono); font-size: 10px; padding: 5px 12px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; border-radius: 3px; transition: all .15s; }
+  .raw-tab.active { background: var(--accent-s); border-color: var(--accent); color: var(--accent); }
+  .raw-content { display: none; max-height: 220px; overflow-y: auto; }
+  .raw-content.visible { display: block; }
+
+  .status-bar { font-family: var(--mono); font-size: 10px; color: var(--muted); padding: 8px 0 0; border-top: 1px solid var(--border); margin-top: 6px; display: flex; gap: 18px; flex-wrap: wrap; }
+  .status-bar span { color: var(--accent); }
+
+  .no-data { text-align: center; color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 70px 0; }
+  .no-data-icon { font-size: 28px; margin-bottom: 12px; opacity: .25; }
+
+  /* TOOLBAR + VIEW TABS */
+  .toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; margin-bottom: 16px; position: sticky; top: 0; z-index: 20; }
+  .view-tabs { display: flex; gap: 5px; }
+  .view-tab { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 6px 13px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 3px; cursor: pointer; transition: all .15s; }
+  .view-tab.active { background: var(--accent-s); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .toolbar-btns { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-left: auto; }
+  .img-q { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: .06em; display: inline-flex; align-items: center; gap: 4px; }
+  .img-q select { font-family: var(--mono); font-size: 9px; color: var(--accent); background: var(--panel); border: 1px solid var(--border); border-radius: 3px; padding: 3px 4px; outline: none; }
+
+  /* MANUAL DSC */
+  .man-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; margin-bottom: 20px; }
+  .man-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .man-head b { color: var(--accent); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .man-hint { color: var(--muted); }
+  .man-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  .man-tab { font-family: var(--mono); font-size: 9.5px; padding: 3px 9px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+  .man-tab.active { background: var(--accent-s); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .man-tab .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .man-tab.warn { border-color: var(--accent2); color: var(--accent2); }
+  .man-tools, .man-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+  .man-ctl { margin-top: 9px; margin-bottom: 0; }
+  .man-tools .grp { display: inline-flex; align-items: center; gap: 3px; padding-right: 10px; border-right: 1px solid var(--border); margin-right: 2px; }
+  .man-tools .grp:last-child { border-right: none; }
+  .man-ctl input { width: 74px; background: var(--panel); border: 1px solid var(--border); color: var(--accent2); font-family: var(--mono); font-size: 10px; padding: 3px 6px; border-radius: 3px; text-align: right; outline: none; }
+  .man-ctl input:focus { border-color: var(--accent); }
+  .man-ctl select { font-family: var(--mono); font-size: 10px; color: var(--accent3); background: var(--panel); border: 1px solid var(--border); border-radius: 3px; padding: 2px 4px; outline: none; }
+  .man-ctl .go { background: var(--accent); color: #fff; border: none; font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 4px 12px; border-radius: 3px; cursor: pointer; }
+  .man-ctl .go:hover { opacity: .88; }
+  .man-steps { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; font-family: var(--mono); font-size: 9px; color: var(--muted); }
+  .step-chip { font-family: var(--mono); font-size: 9px; padding: 2px 8px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 3px; cursor: pointer; white-space: nowrap; }
+  .step-chip:hover { border-color: var(--accent3); color: var(--accent3); }
+  .step-chip.active { background: var(--accent-s); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .step-chip.k-cool { border-style: dashed; }
+  .step-chip.k-iso { font-style: italic; }
+  .man-plot { width: 100%; }
+  .man-stats { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); font-family: var(--mono); font-size: 10px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+  .man-stats b { color: var(--text); font-weight: 600; }
+  .man-stats .ok { color: var(--accent); }
+  .man-stats .warn { color: var(--accent2); }
+  @media print { #viewManual { display: none !important; } }
+
+  /* PEAK PICKER */
+  .peak-panel { background: var(--surface); border: 1px solid #f0c0aa; border-left: 3px solid var(--accent2); border-radius: 4px; padding: 12px 14px; margin-bottom: 18px; }
+  .peak-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 10px; }
+  .peak-head b { color: var(--accent2); font-size: 11px; }
+  .peak-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  .peak-tab { font-family: var(--mono); font-size: 9.5px; padding: 3px 9px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 3px; cursor: pointer; }
+  .peak-tab.active { background: #fdf0eb; border-color: var(--accent2); color: var(--accent2); font-weight: 600; }
+  .peak-tab.done { border-color: var(--accent); color: var(--accent); }
+  .peak-body { display: flex; flex-direction: column; gap: 9px; }
+  .peak-plot { width: 100%; }
+  .peak-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .peak-ctl input { width: 66px; background: var(--panel); border: 1px solid var(--border); color: var(--accent2); font-family: var(--mono); font-size: 10px; padding: 3px 6px; border-radius: 3px; text-align: right; outline: none; }
+  .peak-ctl input:focus { border-color: var(--accent); }
+  .peak-hint { color: var(--muted); }
+  @media print { .toolbar, .peak-panel { display: none !important; } }
+
+  /* REPORT — layout ispirato al foglio METTLER STARe MFK */
+  .report { background: #fff; border: 1px solid #333; border-radius: 2px; margin-bottom: 22px; }
+  .report-head, .report-foot { display: flex; align-items: center; gap: 12px; padding: 5px 10px; font-family: var(--sans); font-size: 10.5px; font-style: italic; font-weight: 600; color: #111; }
+  .report-head { border-bottom: 1px solid #333; }
+  .report-foot { border-top: 1px solid #333; }
+  .report-head .exo { font-style: normal; font-family: var(--mono); font-weight: 500; }
+  .report-title { flex: 1; text-align: center; }
+  .report-date, #reportFootR { margin-left: auto; }
+  .report-foot .report-btns { font-style: normal; }
+  .report-foot .dl-btn { padding: 3px 10px; }
+
+  .report-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .rp { padding: 10px 12px; border-right: 1px solid #333; border-bottom: 1px solid #333; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .rp:nth-child(2n) { border-right: none; }
+  .rp:nth-child(n+3) { border-bottom: none; }
+  .rp-plot { order: 1; width: 100%; min-width: 0; }
+  .rp-cap { order: 0; font-family: var(--sans); font-size: 10.5px; color: #111; }
+  .rp-side { order: 2; width: 100%; font-family: var(--mono); font-size: 8.5px; line-height: 1.5; max-height: 190px; overflow: auto; display: flex; flex-wrap: wrap; gap: 4px 18px; border-top: 1px dashed var(--border); padding-top: 7px; }
+  .axis-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-family: var(--mono); font-size: 9px; color: var(--muted); }
+  .axis-bar .ax-lab { text-transform: uppercase; letter-spacing: .08em; }
+  .axis-bar .ax-g { display: inline-flex; align-items: center; gap: 3px; }
+  .axis-bar input { width: 54px; background: var(--panel); border: 1px solid var(--border); color: var(--accent3); font-family: var(--mono); font-size: 9px; padding: 2px 5px; border-radius: 3px; text-align: right; outline: none; }
+  .axis-bar input:focus { border-color: var(--accent); }
+  @media print { .axis-bar { display: none !important; } }
+  .int-editor { order: 3; width: 100%; margin-top: 0; border-top: 1px dashed var(--border); padding-top: 7px; font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
+  .int-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .int-head b { color: var(--text); font-size: 9.5px; }
+  .int-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; flex-wrap: wrap; }
+  .int-row .int-b { width: 74px; font-weight: 600; }
+  .int-row input { width: 58px; background: var(--panel); border: 1px solid var(--border); color: var(--accent2); font-family: var(--mono); font-size: 9.5px; padding: 2px 5px; border-radius: 3px; text-align: right; outline: none; }
+  .int-row input:focus { border-color: var(--accent); }
+  .int-unit { font-family: var(--mono); font-size: 9px; color: var(--accent3); background: var(--panel); border: 1px solid var(--border); border-radius: 3px; padding: 1px 3px; outline: none; }
+  .iso-mini.active { background: var(--accent-s); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .int-row .int-auto { color: var(--accent); }
+  .int-row .int-man { color: var(--accent2); font-weight: 600; }
+  .iso-tools { margin-left: 8px; display: inline-flex; gap: 4px; vertical-align: middle; }
+  .iso-mini { font-family: var(--mono); font-size: 9px; padding: 2px 7px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 3px; cursor: pointer; }
+  .iso-mini[disabled] { opacity: .4; cursor: not-allowed; }
+  .iso-mini:hover { border-color: var(--accent); color: var(--accent); }
+  .iso-pick { display: flex; width: 100%; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+  .iso-chip { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 3px; cursor: pointer; user-select: none; white-space: nowrap; }
+  .iso-chip.on { border-color: currentColor; background: #fff; font-weight: 600; }
+  .rp-side.conv { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, max-content)); gap: 2px 18px; align-content: start; justify-content: start; }
+  .rp-note { white-space: nowrap; }
+  .rp-note b { font-weight: 600; }
+  .rp-side table { font-size: 8.5px; border-collapse: collapse; }
+  .rp-side th { font-size: 8.5px; padding: 0 5px 1px 0; border: none; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .rp-side td { padding: 0 5px 0 0; border: none; white-space: nowrap; }
+  .rp-side tr:hover td { background: none; }
+
+  @media print {
+    @page { size: A4 landscape; margin: 12mm 8mm 8mm 8mm;
+      @top-right { content: var(--print-hdr, ""); font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #6b7684; }
+      @bottom-left { content: ""; } @bottom-center { content: ""; } @bottom-right { content: ""; } }
+    body { background: #fff; }
+    header, .sidebar, #viewData, .charts-grid, .raw-section, .results-section, .status-bar,
+    .eq-box, .phase-strip, .modal-back, .report-btns, .toolbar, .peak-panel { display: none !important; }
+    .layout { display: block; }
+    .main { padding: 0; overflow: visible; }
+    .report { border-color: #000; page-break-inside: avoid; }
+    .report-foot #reportFootL, .report-foot #reportFootR { display: none !important; }   /* no date/version in footer */
+    .rp-side { max-height: none; overflow: visible; }
+  }
+
+  /* MODAL */
+  .modal-back { position: fixed; inset: 0; background: rgba(20,28,38,.45); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 50; }
+  .modal-back.visible { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; max-width: 760px; width: 100%; max-height: 84vh; overflow-y: auto; box-shadow: 0 18px 48px rgba(20,28,38,.18); }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+  .modal-head h2 { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  .modal-close { background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1; }
+  .modal-close:hover { color: var(--accent2); }
+  .modal-body { padding: 20px 22px; }
+  .modal-body h4 { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+  .modal-body h4:first-child { margin-top: 0; }
+  .modal-body p, .modal-body li { font-size: 12.5px; line-height: 1.75; color: var(--text); }
+  .modal-body ul { padding-left: 18px; }
+  .modal-body pre { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 14px; font-family: var(--mono); font-size: 10.5px; line-height: 1.65; color: var(--text); white-space: pre-wrap; }
+  .modal-body code { font-family: var(--mono); color: var(--accent3); font-size: 11px; }
+  .g-lead { padding: 10px 12px; background: var(--panel); border-left: 3px solid var(--accent3); border-radius: 4px; margin-bottom: 4px; }
+  .g-steps { padding-left: 18px; }
+  .g-steps li { margin-bottom: 4px; }
+  .g-note { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+  .g-table { width: 100%; border-collapse: collapse; font-family: var(--sans); font-size: 12px; margin-top: 4px; }
+  .g-table td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--border2); vertical-align: top; white-space: normal; line-height: 1.6; }
+  .g-table td:first-child { width: 30%; color: var(--text); }
+  .g-table tr:last-child td { border-bottom: none; }
+  .g-table tr:hover td { background: none; }
+  .lic-badge { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 14px; background: rgba(52,87,213,.06); border: 1px solid rgba(52,87,213,.28); border-radius: 5px; }
+  .lic-badge-t { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent3); }
+  .lic-badge-s { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .lic-meta { margin-top: 12px; padding: 9px 12px; background: var(--accent-s); border: 1px solid rgba(13,138,112,.3); border-radius: 5px; font-family: var(--mono); font-size: 11.5px; line-height: 1.9; color: var(--text); }
+  .lic-meta b { color: var(--accent); }
+  .lic-ita { margin-top: 10px; padding: 9px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 5px; font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.8; }
+  .lic-ita b { color: var(--text); }
+  .lic-tag { display: inline-block; background: var(--accent-s); color: var(--accent); border: 1px solid var(--accent); font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 3px; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #c9d1da; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #aab5c0; }
+  .spinner { display: inline-block; width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; margin-right: 6px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Vyazovkin Advanced Isoconversional Method</h1>
+  <p>Curing Kinetics · Non-Isothermal DSC</p>
+  <div class="hdr-menu">
+    <button class="menu-btn" onclick="newSession()">🗑 New session</button>
+    <button class="menu-btn" onclick="saveSession()">💾 Save session</button>
+    <button class="menu-btn" onclick="document.getElementById('sessionInput').click()">📁 Open session</button>
+    <input type="file" id="sessionInput" accept=".pfvyaz,application/json" onchange="openSessionFile(event)">
+    <button class="menu-btn" onclick="openModal('modalGuide')">ⓘ Guide</button>
+    <button class="menu-btn" onclick="openModal('modalRefs')">📚 References</button>
+    <button class="menu-btn" onclick="openModal('modalLicense')">⚖ License</button>
+    <span class="dirty-dot" id="dirtyDot" title="Unsaved changes">● unsaved</span>
+    <div class="badge" id="verBadge">v3.10.0 · AIC 2001 · ICTAC 2011</div>
+  </div>
+</header>
+
+<div class="layout">
+
+<!-- ═══════════ SIDEBAR ═══════════ -->
+<aside class="sidebar">
+
+  <div class="section-title">Data Source</div>
+  <div class="mode-toggle">
+    <div class="mode-btn active" id="modeSimBtn" onclick="setMode('sim')">⚙ Simulation</div>
+    <div class="mode-btn"        id="modeFileBtn" onclick="setMode('file')">📂 Real Files</div>
+  </div>
+
+  <!-- FILE SECTION -->
+  <div id="fileSection">
+    <div class="section-title">DSC Scans — Load Files</div>
+    <div class="format-hint">
+      <p>
+        Formats: <code>.txt</code> <code>.csv</code> <code>.tsv</code> <code>.dat</code>
+        <code>.asc</code> <code>.prn</code> <code>.json</code> <code>.xlsx</code> <code>.xls</code><br>
+        Separators: <code>,</code> <code>;</code> <code>tab</code> <code>space</code> · decimal <code>.</code> or <code>,</code><br>
+        Columns detected by <span class="col-ok">name</span> or <span class="col-ok">unit</span> (<code>[s] [mW] [°C] [K]</code>):<br>
+        &nbsp;• <span class="col-ok">T</span> temperature · <span class="col-ok">t</span> time<br>
+        &nbsp;• <span class="col-ok">α</span> conversion (<code>alpha</code>, <code>conv</code>) <em>or</em> <span class="col-ok">heat flow</span><br>
+        β and heating ramp <span class="col-ok">auto-detected</span>.<br>
+        <span class="col-ok">Automatic</span> calculation once loading completes.
+      </p>
+    </div>
+    <div style="margin-top:14px" class="section-title">Loaded Files</div>
+    <div class="scan-list" id="scanList">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:14px 0">No file loaded</div>
+    </div>
+    <button class="add-file-btn" onclick="document.getElementById('hiddenFileInput').click()">
+      + Add scans (one file = one β)
+    </button>
+    <input type="file" id="hiddenFileInput"
+           accept=".csv,.txt,.dat,.tsv,.asc,.prn,.json,.xlsx,.xls"
+           multiple onchange="handleFiles(event)">
+    <div class="switch-row">
+      <input type="checkbox" id="autoRun" checked>
+      <label for="autoRun">Auto-calculate after loading</label>
+    </div>
+    <div class="parse-error" id="parseError"></div>
+  </div>
+
+  <!-- SIMULATION SECTION -->
+  <div id="simSection">
+    <div class="section-title">System Parameters</div>
+    <div class="param-row"><label>Total ΔH<sub>rxn</sub> (J g⁻¹)</label><input type="number" id="dH" value="420" step="10"></div>
+    <div class="param-row"><label>T<sub>start</sub> (°C)</label><input type="number" id="T0" value="0" step="5"></div>
+    <div class="param-row"><label>T<sub>end</sub> (°C)</label><input type="number" id="Tend" value="300" step="5"></div>
+
+    <div class="section-title" style="margin-top:14px">Heating Rates β (K min⁻¹)</div>
+    <div class="beta-grid">
+      <div class="beta-item"><label>β₁</label><input type="number" id="b1" value="2.5"></div>
+      <div class="beta-item"><label>β₂</label><input type="number" id="b2" value="5"></div>
+      <div class="beta-item"><label>β₃</label><input type="number" id="b3" value="10"></div>
+      <div class="beta-item"><label>β₄</label><input type="number" id="b4" value="20"></div>
+    </div>
+
+    <div class="section-title">DGEBA/IPDA Kinetics</div>
+    <div class="param-row"><label>E<sub>a,chem</sub> (kJ mol⁻¹)</label><input type="number" id="Ea_chem" value="58" step="1"></div>
+    <div class="param-row"><label>E<sub>a,diff</sub> (kJ mol⁻¹)</label><input type="number" id="Ea_diff" value="120" step="1"></div>
+    <div class="param-row"><label>α<sub>gel</sub></label><input type="number" id="alpha_gel" value="0.70" step="0.05" min="0.3" max="0.95"></div>
+    <div class="param-row"><label>autocatalytic m</label><input type="number" id="m_cat" value="0.5" step="0.1" min="0.1" max="1.0"></div>
+  </div>
+
+  <!-- SHARED -->
+  <div class="section-title" style="margin-top:14px">Analysis Parameters</div>
+  <div class="param-row"><label>Δα (isoconversional step)</label><input type="number" id="dAlpha" value="0.05" step="0.01" min="0.02" max="0.1"></div>
+  <div class="param-row"><label>Isothermal T min (°C)</label><input type="number" id="isoTmin" value="80" step="5"></div>
+  <div class="param-row"><label>Isothermal T max (°C)</label><input type="number" id="isoTmax" value="200" step="5"></div>
+
+  <button class="run-btn" id="runBtn" onclick="runAll()">▶ RUN VYAZOVKIN</button>
+
+  <div class="info-box">
+    <p>
+      <code>Φ(Eα) = Σᵢ Σⱼ≠ᵢ J[Eα,Tᵢ]/J[Eα,Tⱼ]</code><br>
+      <code>J</code> = trapezoidal rule on an interpolated α grid over <code>[α−Δα, α]</code><br>
+      Minimisation: Golden Section Search<br>
+      Minimum 3 scans at different β.
+    </p>
+  </div>
+</aside>
+
+<!-- ═══════════ MAIN ═══════════ -->
+<main class="main">
+  <div class="no-data" id="placeholder">
+    <div class="no-data-icon">⬡</div>
+    Choose a data source and press <strong>RUN VYAZOVKIN</strong>
+  </div>
+
+  <!-- PEAK PICKER — shown when a peak could not be found automatically -->
+  <section class="peak-panel" id="peakPanel" style="display:none">
+    <div class="peak-head">
+      <b>⚠ Peak picker</b>
+      <span id="peakMsg"></span>
+      <span class="peak-tabs" id="peakTabs"></span>
+    </div>
+    <div class="peak-body">
+      <div class="peak-plot"><canvas id="peakChart" height="150"></canvas></div>
+      <div class="peak-ctl" id="peakCtl"></div>
+    </div>
+  </section>
+
+  <div id="results" style="display:none">
+
+    <!-- TOP TOOLBAR -->
+    <div class="toolbar">
+      <div class="view-tabs">
+        <button class="view-tab active" id="viewReportBtn" onclick="setView('report')">▤ MFK Report</button>
+        <button class="view-tab"        id="viewDataBtn"   onclick="setView('data')">📈 Charts &amp; Tables</button>
+        <button class="view-tab"        id="viewManualBtn" onclick="setView('manual')">🔬 Manual DSC</button>
+      </div>
+      <div class="toolbar-btns">
+        <label class="img-q" title="Resolution of the exported chart images">img
+          <select id="imgQuality" onchange="exportScale = +this.value">
+            <option value="1">Screen 1×</option>
+            <option value="2" selected>High 2×</option>
+            <option value="3">Print 3×</option>
+            <option value="4">Print 4×</option>
+          </select>
+        </label>
+        <button class="dl-btn" onclick="exportPDF()">⎙ Export PDF</button>
+        <button class="dl-btn" onclick="exportFullReport()">⬇ Full report (HTML)</button>
+        <button class="dl-btn" onclick="downloadTable('csv')">⬇ CSV</button>
+        <button class="dl-btn tsv" onclick="downloadTable('tsv')">⬇ TSV</button>
+        <button class="dl-btn" onclick="downloadIso()">⬇ Isothermal CSV</button>
+        <button class="dl-btn clip" onclick="downloadTable('clipboard')">⎘ Copy (tab)</button>
+      </div>
+    </div>
+
+    <div class="eq-box">
+      <div class="eq-main">Φ(Eα) = Σᵢ₌₁ⁿ Σⱼ≠ᵢ J[Eα, Tᵢ(tα)] / J[Eα, Tⱼ(tα)]</div>
+      <div class="eq-note" style="margin-top:4px">
+        J[Eα, Tᵢ] = ∫[t(α−Δα)→t(α)] exp(−Eα / R·T(t)) dt &nbsp;|&nbsp; Trapezoidal &nbsp;|&nbsp; Golden Section
+      </div>
+    </div>
+
+    <div class="phase-strip" id="phaseStrip"></div>
+
+    <!-- ═══ REPORT MFK (layout METTLER STARe) ═══ -->
+    <section class="report" id="report">
+      <div class="report-head">
+        <span class="exo">↑ exo</span>
+        <span class="report-title" id="reportTitle"></span>
+        <span class="report-date" id="reportDate"></span>
+      </div>
+      <div class="report-grid">
+
+        <div class="rp">
+          <div class="rp-cap">
+            DSC thermograms — integrated peaks
+            <span class="iso-tools">
+              <button class="iso-mini active" id="dsctAxisTime" onclick="setDsctAxis('time')">x = time</button>
+              <button class="iso-mini" id="dsctAxisTemp" onclick="setDsctAxis('temp')">x = temperature</button>
+            </span>
+          </div>
+          <div class="rp-plot"><canvas id="dscTimeChart" height="150"></canvas></div>
+          <div class="rp-side" id="dscNotes"></div>
+          <div class="int-editor" id="intEditor"></div>
+        </div>
+
+        <div class="rp">
+          <div class="rp-plot"><canvas id="convChart" height="150"></canvas></div>
+          <div class="rp-side conv" id="convNotes"></div>
+        </div>
+
+        <div class="rp">
+          <div class="rp-cap">Activation Energy</div>
+          <div class="rp-plot"><canvas id="eaChart" height="150"></canvas></div>
+        </div>
+
+        <div class="rp">
+          <div class="rp-cap">
+            Applied Kinetics: Iso-Conversion
+            <span class="iso-tools">
+              <button class="iso-mini" onclick="isoSelectAll(true)">all</button>
+              <button class="iso-mini" onclick="isoSelectAll(false)">none</button>
+              <button class="iso-mini" onclick="isoSelectDecades()">α = 0.1 … 0.9</button>
+            </span>
+            <span class="iso-pick" id="isoPick"></span>
+          </div>
+          <div class="rp-plot"><canvas id="isoChart" height="150"></canvas></div>
+        </div>
+
+      </div>
+      <div class="report-foot">
+        <span id="reportFootL"></span>
+        <span class="report-btns"></span>
+        <span id="reportFootR"></span>
+      </div>
+    </section>
+
+    <div id="viewData" style="display:none">
+    <div class="charts-grid">
+      <div class="chart-card wide">
+        <div class="chart-label">DSC Thermograms — Heat Flow vs Temperature &nbsp;<span>dH/dt</span></div>
+        <canvas id="dscChart" height="115"></canvas>
+      </div>
+      <div class="chart-card wide">
+        <div class="chart-label">Degree of Conversion α vs Temperature &nbsp;<span>α [—]</span></div>
+        <canvas id="alphaChart" height="115"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-label">Vyazovkin vs KAS &nbsp;<span>Eα comparison</span></div>
+        <canvas id="compareChart" height="185"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-label">Φ(Eα) function at α = 0.50 &nbsp;<span>minimisation curve</span></div>
+        <canvas id="phiChart" height="185"></canvas>
+      </div>
+    </div>
+
+    <!-- RAW DATA TABS -->
+    <div class="raw-section">
+      <h3>Data per Scan</h3>
+      <div class="raw-tabs" id="rawTabs"></div>
+      <div id="rawContents"></div>
+    </div>
+
+    <!-- RESULTS TABLE + DOWNLOAD -->
+    <div class="results-section">
+      <div class="results-header">
+        <h3>Results Table — E_α(α) — Vyazovkin</h3>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr id="resultsHead"></tr></thead>
+          <tbody id="resultsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ISO TABLE -->
+    <div class="results-section">
+      <div class="results-header">
+        <h3>Isothermal cure time t<sub>α</sub> (min) — model-free prediction</h3>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr id="isoHead"></tr></thead>
+          <tbody id="isoTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    </div><!-- /viewData -->
+
+    <!-- ═══ MANUAL DSC — inspect a trace and set the integration limits by hand ═══ -->
+    <div id="viewManual" style="display:none">
+      <div class="man-wrap">
+        <div class="man-head">
+          <b>Manual DSC analysis</b>
+          <span class="man-hint" id="manualMsg"></span>
+          <span class="man-tabs" id="manualTabs"></span>
+        </div>
+
+        <div class="man-tools" id="manualTools"></div>
+        <div class="man-steps" id="manualSteps"></div>
+        <div class="man-plot"><canvas id="manualChart" height="150"></canvas></div>
+        <div class="man-ctl" id="manualCtl"></div>
+        <div class="man-stats" id="manualStats"></div>
+      </div>
+    </div>
+
+    <div class="status-bar" id="statusBar"></div>
+  </div>
+</main>
+</div>
+
+<!-- ═══════════ MODALS ═══════════ -->
+<div class="modal-back" id="modalLicense" onclick="if(event.target===this)closeModal('modalLicense')">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>⚖ License &amp; Credits</h2>
+      <button class="modal-close" onclick="closeModal('modalLicense')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="lic-badge">
+        <span style="font-size:20px">🔒</span>
+        <div>
+          <div class="lic-badge-t">PolyForm Noncommercial License 1.0.0</div>
+          <div class="lic-badge-s">Free for personal, educational and research use · Commercial use requires a separate license</div>
+        </div>
+      </div>
+
+      <h4>License text</h4>
+      <pre>POLYFORM NONCOMMERCIAL LICENSE 1.0.0
+
+Copyright (c) 2025-2026 Flavio Pendolino
+Vyazovkin Method — Epoxy Cure Kinetics — All rights reserved.
+
+--- ACCEPTANCE ---
+In order to get any license under these terms, you must agree
+to them as both strict obligations and conditions to all your licenses.
+
+--- COPYRIGHT LICENSE ---
+The licensor grants you a copyright license for the software to do
+everything you might do with the software that is not commercial use
+or a use closely related to commercial use, for any term of years.
+
+--- NONCOMMERCIAL PURPOSES ---
+Noncommercial purposes include personal use, educational use, and
+research use. Noncommercial purposes do not include any purpose
+primarily intended for or directed toward commercial advantage or
+monetary compensation, or any use by any legal entity primarily
+engaged in the business of providing goods or services of the kind
+provided by the software or a closely related kind.
+
+--- COVENANTS (Copyleft) ---
+You may not allow any third party to benefit from the grants of this
+license without enforcing all terms of this license as conditions
+for those grants.
+
+--- NOTICES ---
+Ensure all copies of the software include all copyright, patent,
+trademark, and attribution notices from the source you received them.
+
+--- COMMERCIALIZATION ---
+You may not commercialize the software, meaning you may not grant
+licenses to use the software or distribute the software for a fee,
+nor may you otherwise seek monetary compensation in connection with
+the software.
+
+--- NO LIABILITY ---
+As far as the law allows, the software comes as is, without any
+warranty or condition, and the licensor will not be liable to you
+for any damages arising out of these terms or the use or nature of
+the software, under any kind of legal claim.
+
+Full license text: https://polyformproject.org/licenses/noncommercial/1.0.0/</pre>
+
+      <div class="lic-meta">
+        <b>Author:</b> Flavio Pendolino<br>
+        <b>Version:</b> 3.10.0 (2026)<br>
+        <b>License:</b> PolyForm Noncommercial 1.0.0<br>
+        <b>Commercial use:</b> <a href="mailto:penfla@me.com">penfla@me.com</a><br>
+        <b>Purpose:</b> cure kinetics of epoxy thermosets from non-isothermal DSC<br>
+        <b>Method:</b> Vyazovkin Advanced Isoconversional (AIC) · KAS cross-check · model-free isothermal prediction<br>
+        <b>Disclaimer:</b> validate the results against your own reference samples before any analytical,
+        engineering, safety or regulatory use.<br>
+        <b>AI disclosure:</b> this tool performs deterministic calculations;
+        it does not generate content through generative AI (Art. 50 AI Act not applicable).
+      </div>
+
+      <div class="lic-ita">
+        <b>Summary:</b> this application is distributed under the PolyForm Noncommercial License 1.0.0.
+        Free use is granted for personal, educational and research purposes. Commercial use is not allowed
+        without a separate license. For commercial use contact:
+        <a href="mailto:penfla@me.com">penfla@me.com</a>
+      </div>
+
+      <h4>Third-party components</h4>
+      <ul>
+        <li>Chart.js 4.4.1 — MIT License</li>
+        <li>SheetJS Community Edition (xlsx) 0.20.2 — Apache License 2.0</li>
+        <li>Inter — SIL Open Font License 1.1 — rsms.me/inter</li>
+        <li>JetBrains Mono — SIL Open Font License 1.1 — jetbrains.com/lp/mono</li>
+      </ul>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal-back" id="modalRefs" onclick="if(event.target===this)closeModal('modalRefs')">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>📚 References</h2>
+      <button class="modal-close" onclick="closeModal('modalRefs')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="g-lead">Method and recommendations this software implements.</p>
+
+      <h4>Isoconversional method</h4>
+      <ul>
+        <li>S. Vyazovkin, <em>Modification of the integral isoconversional method to account
+        for variation in the activation energy</em>, <em>J. Comput. Chem.</em> <b>22</b> (2001)
+        178–183. <a href="https://doi.org/10.1002/1096-987X(20010130)22:2%3C178::AID-JCC5%3E3.0.CO;2-%23" target="_blank" rel="noopener">doi:10.1002/1096-987X&lt;178::AID-JCC5&gt;</a></li>
+        <li>S. Vyazovkin, N. Sbirrazzuoli, <em>Isoconversional kinetic analysis of thermally
+        stimulated processes in polymers</em>, <em>Macromol. Rapid Commun.</em> <b>27</b> (2006)
+        1515–1532. <a href="https://doi.org/10.1002/marc.200600404" target="_blank" rel="noopener">doi:10.1002/marc.200600404</a></li>
+      </ul>
+
+      <h4>ICTAC recommendations</h4>
+      <ul>
+        <li>S. Vyazovkin, A.K. Burnham, J.M. Criado, L.A. Pérez-Maqueda, C. Popescu,
+        N. Sbirrazzuoli, <em>ICTAC Kinetics Committee recommendations for performing kinetic
+        computations on thermal analysis data</em>, <em>Thermochim. Acta</em> <b>520</b> (2011)
+        1–19. <a href="https://doi.org/10.1016/j.tca.2011.03.034" target="_blank" rel="noopener">doi:10.1016/j.tca.2011.03.034</a></li>
+        <li>S. Vyazovkin et al., <em>ICTAC Kinetics Committee recommendations for analysis of
+        multi-step kinetics</em>, <em>Thermochim. Acta</em> <b>689</b> (2020) 178597.
+        <a href="https://doi.org/10.1016/j.tca.2020.178597" target="_blank" rel="noopener">doi:10.1016/j.tca.2020.178597</a></li>
+      </ul>
+
+      <h4>Comparison method (KAS)</h4>
+      <ul>
+        <li>H.E. Kissinger, <em>Reaction kinetics in differential thermal analysis</em>,
+        <em>Anal. Chem.</em> <b>29</b> (1957) 1702–1706.</li>
+        <li>T. Akahira, T. Sunose, <em>Trans. Joint Convention of Four Electrical Institutes</em>,
+        Res. Report Chiba Inst. Technol. <b>16</b> (1971) 22–31.</li>
+      </ul>
+
+      <p class="g-note">Disclaimer: this software is a research aid. Validate the results against
+      reference samples before any analytical, engineering, safety or regulatory use.</p>
+    </div>
+  </div>
+</div>
+<div class="modal-back" id="modalGuide" onclick="if(event.target===this)closeModal('modalGuide')">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>ⓘ User guide — v3.10.0</h2>
+      <button class="modal-close" onclick="closeModal('modalGuide')">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <p class="g-lead">This application derives the effective activation energy
+      E<sub>α</sub>(α) of thermoset curing from <b>non-isothermal DSC scans recorded at several
+      heating rates β</b>, using Vyazovkin's advanced isoconversional method (AIC), and turns it
+      into a <b>model-free prediction of the isothermal cure time</b>.</p>
+
+      <h4>1 · Quick start</h4>
+      <ol class="g-steps">
+        <li>Press <b>📂 Real Files</b> in the sidebar.</li>
+        <li><b>+ Add scans</b> and select at least <b>3 files</b> (4 or more recommended),
+        one per heating rate.</li>
+        <li>Check the <b>β</b> values detected automatically in the file list; enter the
+        <b>mass (mg)</b> if you want the enthalpy normalised in J g⁻¹.</li>
+        <li>The calculation starts on its own once loading completes (<em>Auto-calculate</em>
+        checkbox). Otherwise press <b>▶ RUN VYAZOVKIN</b>.</li>
+        <li>Read the report, then export with <b>⬇ CSV</b>, <b>⬇ Full report</b> or
+        <b>⎙ Print / PDF</b>.</li>
+      </ol>
+      <p class="g-note">To try the app without data: <b>⚙ Simulation</b> mode builds four synthetic
+      DGEBA/IPDA thermograms from the kinetic parameters in the sidebar.</p>
+
+      <h4>2 · Preparing the files</h4>
+      <p><b>One file = one heating rate β.</b> Accepted formats:
+      <code>.txt</code> <code>.csv</code> <code>.tsv</code> <code>.dat</code> <code>.asc</code>
+      <code>.prn</code> <code>.json</code> <code>.xlsx</code> <code>.xls</code>.
+      Separator (comma, semicolon, tab, space) and decimal mark (point or comma) are detected
+      automatically; a header row is optional.</p>
+      <p>A <b>temperature</b> column is required, plus either a <b>conversion α</b> column or a
+      <b>heat flow</b> column. A <b>time</b> column is recommended: if missing it is reconstructed
+      from β. Columns are identified from units (<code>[s] [min] [mW] [°C] [K]</code>), from names
+      (<code>time, t, Tr, temperature, alpha, conv, heat flow, DSC…</code>) or, failing both, from
+      the numeric behaviour of each column.</p>
+      <p>On the raw data the app automatically performs:</p>
+      <ul>
+        <li><b>ramp extraction</b>: in multi-segment files (heat/cool/heat) it isolates the first
+        heating ramp and discards the instrument transients at both ends;</li>
+        <li><b>peak detection</b> by local prominence, including the exothermic direction
+        (exo-up / exo-down);</li>
+        <li><b>linear onset→endset baseline</b> and peak integration to obtain α(t);</li>
+        <li><b>β</b> from a least-squares fit of T vs t (with no time axis: from the file name, e.g.
+        <code>…10C_min…</code>) and <b>mass</b> from the file name when present
+        (e.g. <code>… 11.3300 mg</code>).</li>
+      </ul>
+      <p class="g-note">Every derived value is shown under the file name and stays editable by hand.</p>
+
+      <h4>3 · Parameters</h4>
+      <table class="g-table">
+        <tr><td><b>Δα</b></td><td>isoconversional step (0.02–0.10). Smaller = more points, noisier
+        at very low and very high conversion. Default 0.05.</td></tr>
+        <tr><td><b>Isothermal T min / max</b></td><td>temperature range of the isothermal prediction
+        (Iso-Conversion panel and its table).</td></tr>
+        <tr><td><b>β</b>, <b>m (mg)</b></td><td>per scan: heating rate and sample mass. The mass is
+        only used for the <em>normalized</em> value in J g⁻¹.</td></tr>
+        <tr><td><b>Simulation block</b></td><td>ΔH, temperature range, four β values,
+        E<sub>a,chem</sub>, E<sub>a,diff</sub>, α<sub>gel</sub>, autocatalytic exponent:
+        active in Simulation mode only.</td></tr>
+      </table>
+
+      <h4>4 · Views and toolbar</h4>
+      <p>The toolbar at the top of the results holds the two views and every export button:</p>
+      <ul>
+        <li><b>▤ MFK Report</b> — the four-panel STARe sheet (thermograms, conversion,
+        activation energy, iso-conversion).</li>
+        <li><b>📈 Charts &amp; Tables</b> — the remaining charts (DSC vs T, α vs T, Vyazovkin vs KAS,
+        Φ function), the per-scan raw data and the result tables.</li>
+        <li><b>🔬 Manual DSC</b> — one trace at a time, with the tools to place the integration
+        limits by hand (see §6).</li>
+        <li><b>⎙ Export PDF</b>, <b>⬇ Full report (HTML)</b>, <b>⬇ CSV / TSV / Isothermal CSV</b>,
+        <b>⎘ Copy</b> — always reachable, the toolbar stays pinned while scrolling.</li>
+        <li><b>img</b> selector — resolution of the exported chart images (1× screen … 4× print).
+        Use 3×–4× when the PDF is meant for print.</li>
+      </ul>
+
+      <h4>5 · Reading the report</h4>
+      <table class="g-table">
+        <tr><td><b>Thermograms<br>(top left)</b></td><td>heat flow vs time, one curve per β.
+        Alongside: <em>Integral</em> (mJ), <em>normalized</em> (J g⁻¹, needs the mass),
+        <em>Peak</em> (°C). The <code>↑ exo</code> marker gives the exothermic direction.</td></tr>
+        <tr><td><b>Conversion<br>(top right)</b></td><td>α % vs temperature. The curves must be
+        <b>ordered and never cross</b>: a higher β shifts the curve to the right. Alongside, the
+        °C / % table for each scan.</td></tr>
+        <tr><td><b>Activation Energy<br>(bottom left)</b></td><td>E<sub>α</sub> vs conversion with a
+        ±σ band. A flat trend means a single-step process; a rise at high conversion means the
+        reaction has moved to diffusion control after gelation.</td></tr>
+        <tr><td><b>Iso-Conversion<br>(bottom right)</b></td><td>predicted time to reach a given α
+        while holding the sample at constant temperature. Logarithmic vertical scale. The
+        <b>α chips</b> above the plot choose which curves are shown; shortcuts
+        <em>all</em>, <em>none</em>, <em>α = 0.1 … 0.9</em>.</td></tr>
+      </table>
+
+      <h4>6 · Manual adjustments</h4>
+      <ul>
+        <li><b>Peak picker</b>: when no peak stands out from the baseline noise, the scan is
+        <em>not</em> discarded — its raw trace is plotted in a dedicated panel so you can read the
+        onset and endset temperatures off the curve and type them in. <em>Apply</em> re-integrates
+        and rejoins the scan to the analysis, <em>Try auto</em> goes back to automatic detection.
+        The tabs switch between the scans still waiting for a manual peak.</li>
+        <li><b>Integration limits</b> (box below the thermograms): for each ramp you can force the
+        start and end temperature of the peak integration. A blank field means the automatic limit
+        (detected onset/endset). <em>all automatic</em> restores automatic detection on every scan.
+        Any change recomputes α, E<sub>α</sub> and the isothermal prediction.</li>
+        <li><b>Manual DSC view</b> (🔬 in the toolbar): pick any scan from the tabs and inspect its
+        raw trace full-width. <b>whole file</b> plots the run exactly as recorded — every step,
+        heating, cooling and isothermal holds included — with the segment feeding the analysis drawn
+        in bold; <b>analysis segment</b> narrows the plot to that segment alone. Under the toolbar,
+        one chip per step (<em>↗ heat</em>, <em>↘ cool</em>, <em>→ hold</em>, with range, rate and
+        duration in the tooltip) switches the analysis onto that step, and <em>use whole file</em>
+        analyses the run without splitting it. β is re-estimated on the new window.
+        If you type limits that fall in another step while looking at the whole file, the analysis
+        moves onto that step by itself. Controls:
+        <em>x</em> switches between temperature and time; <em>y</em> switches between <em>raw</em>
+        heat flow, <em>baseline-subtracted</em> (a straight baseline is removed, so a peak worth only
+        a few tenths of a mW at very low β becomes obvious) and <em>derivative</em> (the peak sits
+        where it crosses zero); <em>whole trace / zoom on window</em> toggles the view.
+        Type the limits, choose <b>°C</b> or <b>min</b>, then <em>Apply limits</em>.
+        <em>detect in window</em> re-runs the automatic onset/endset search restricted to the current
+        window — the usual fix when a shallow peak is missed globally.
+        <em>back to auto</em> restores automatic detection. The read-out below the chart reports
+        state, window, integral, normalized enthalpy, peak temperature and β.</li>
+        <li><b>Integration limits in °C or minutes</b>: each scan carries its own unit; switching it
+        converts the values already entered so the integrated window does not move.</li>
+        <li><b>Enabling scans</b>: the checkbox on each row of <em>Loaded Files</em> includes or
+        excludes that scan from the analysis without removing the file. <em>all</em> / <em>none</em>
+        act on every row; the counter shows how many scans are active. The analysis re-runs on
+        each change and needs at least 3 active scans.</li>
+        <li><b>First report panel</b>: <em>x = time</em> / <em>x = temperature</em> switches the
+        abscissa of the integrated thermograms.</li>
+        <li><b>Axes</b>: the <em>axes</em> strip under each chart sets x min/max and y min/max.
+        A blank field means autoscale; <em>⟲ auto</em> clears the limits of that chart. The grey
+        values in the fields are the bounds currently computed by the app.</li>
+      </ul>
+
+      <h4>7 · Quality checks</h4>
+      <ul>
+        <li><b>Vyazovkin vs KAS</b>: the two methods must agree closely. Large gaps point to badly
+        built α curves (wrong baseline or wrong segment).</li>
+        <li><b>Φ(E<sub>α</sub>)</b>: it must show a <b>sharp minimum</b> inside the search range.
+        If the minimum sits on a bound, the point is flagged <b>⚠</b> in the table and in the status
+        bar: that E<sub>α</sub> is not reliable, usually because the T<sub>α</sub> values of the
+        different β are not separated.</li>
+        <li><b>±σ</b> in the table is the spread of the pairwise isoconversional estimates: large
+        values at the extremes of α are normal.</li>
+      </ul>
+
+      <h4>8 · Sessions</h4>
+      <p>A session stores everything: loaded scans with their raw data, β, masses, integration
+      limits, analysis parameters, axis ranges and α selection.</p>
+      <ul>
+        <li><b>💾 Save session</b> writes a <code>.pfvyaz</code> file. On Chrome and Edge a dialog
+        lets you choose the destination folder and file name; on other browsers the file goes to
+        the download folder.</li>
+        <li><b>📁 Open session</b> restores it and re-runs the calculation.</li>
+        <li><b>🗑 New session</b> clears loaded scans, results, charts, axis ranges and α selection,
+        asking for confirmation when there are unsaved changes.</li>
+        <li>A red <b>● unsaved</b> marker appears in the header as soon as anything changes
+        (files added or removed, β, mass, integration limits). Closing or reloading the tab in that
+        state triggers the browser's «leave site?» confirmation, so a session is never lost by
+        accident. Saving or opening a session clears the marker.</li>
+      </ul>
+      <p class="g-note">A <code>.pfvyaz</code> file is UTF-8 JSON, so it can also be read by other
+      tools; numeric series are rounded to 6 significant digits to keep the file small.</p>
+
+      <h4>9 · Exporting</h4>
+      <ul>
+        <li><b>⬇ CSV / TSV / ⎘ Copy</b>: E<sub>α</sub>(α) table with T<sub>α</sub> for each β, σ,
+        KAS and phase.</li>
+        <li><b>⬇ Isothermal CSV</b>: predicted times (minutes) for every α and every temperature.</li>
+        <li><b>⬇ Full report</b>: one self-contained HTML file with every chart as a PNG, the
+        annotations, the E<sub>α</sub>(α) and isothermal-time tables and the CSVs embedded.</li>
+        <li><b>⎙ Export PDF</b>: prints the four MFK panels on a single A4-landscape page (further
+        charts and tables follow on the next pages); date and page number are placed top-right.
+        Turn off the browser's own header/footer in the print dialog for a clean sheet.</li>
+      </ul>
+      <p class="g-note">CSV files use ASCII headers (<code>alpha</code>, <code>Ea_kJmol</code>)
+      for import into Excel/Origin.</p>
+
+      <h4>10 · Troubleshooting</h4>
+      <table class="g-table">
+        <tr><td>«Load at least 3 DSC scans»</td><td>at least 3 files with <b>different</b> β are
+        required.</td></tr>
+        <tr><td>«temperature column not identified»</td><td>add a header carrying the units, e.g.
+        <code>t [s] · T [°C] · Heat Flow [mW]</code>.</td></tr>
+        <tr><td>«no peak stands out from the baseline noise»</td><td>the scan stays loaded: set the
+        limits in the <b>Peak picker</b> panel. If the file really holds no reaction (e.g. only the
+        second heating, T<sub>g</sub> scan), use the first heating instead.</td></tr>
+        <tr><td>wrong β</td><td>edit it by hand in the file list: the calculation updates.</td></tr>
+        <tr><td>peak integrated badly</td><td>set manual limits in the <b>Peak integration</b> box
+        under the thermograms, or open <b>🔬 Manual DSC</b> for the full toolset.</td></tr>
+        <tr><td>very low β, peak almost flat</td><td>open <b>🔬 Manual DSC</b>, switch <em>y</em> to
+        <em>baseline-subtracted</em>, bracket the bump with the limits and press
+        <em>detect in window</em>.</td></tr>
+        <tr><td>the peak is in another step</td><td>in <b>🔬 Manual DSC</b> keep <em>whole file</em>
+        on and click the step chip that holds the exotherm (a second heating, for instance), or type
+        limits inside it — the analysis follows.</td></tr>
+        <tr><td>E<sub>α</sub> flagged ⚠ or absurd</td><td>check that the conversion curves are
+        separated between the different β and that the extracted ramp (shown under the file name)
+        is the curing one.</td></tr>
+        <tr><td>normalized shows «—»</td><td>the sample mass is missing: fill the <b>m (mg)</b>
+        field.</td></tr>
+      </table>
+
+      <h4>11 · Method</h4>
+      <p>For each α the following is minimised with respect to E<sub>α</sub>:</p>
+      <pre>Φ(Eα) = Σᵢ Σⱼ≠ᵢ  J[Eα, Tᵢ(tα)] / J[Eα, Tⱼ(tα)]
+
+J[Eα, Tᵢ] = ∫  exp(−Eα / R·T(t)) dt     over [t(α−Δα), t(α)]</pre>
+      <p>J is evaluated with the trapezoidal rule on an interpolated α grid (40 points per interval)
+      and the minimum is found by Golden Section Search. Isothermal prediction:</p>
+      <pre>t_α(T₀) = [ ∫₀^{T_α} exp(−E_α/RT) dT ] / [ β · exp(−E_α/R·T₀) ]</pre>
+      <p>with T<sub>α</sub> and β taken from the reference scan (lowest β). Model-free: no
+      assumption on the form of f(α). Minimum 3 ramps, 4 or more recommended (ICTAC 2011).</p>
+
+      <h4>12 · Release notes</h4>
+      <p class="g-note"><b>v3.10.0</b> — fixed a bug where <b>Manual DSC</b>, in <em>whole file</em>
+      mode with the default <em>raw</em> view, plotted heat-flow values misaligned with the time/
+      temperature axis, which silently cut the visible trace down to the length of the segment used
+      for the MFK calculation. <em>whole file</em> now also works for files that carry a conversion
+      (α) column instead of heat flow, defaults to a time axis (so multi-cycle runs no longer fold
+      back on themselves when viewed against temperature), and is disabled with a clear reason when
+      a scan has no full trace stored (e.g. loaded from a pre-3.9 session).<br>
+      <b>v3.9.0</b> — Manual DSC now shows the <b>whole DSC trace</b>, every step
+      of the run included, with the analysed segment highlighted; step chips move the analysis onto
+      any heating, cooling or isothermal segment (β re-estimated), and limits typed on the full view
+      pull the analysis onto the step that contains them. Sessions store the complete run
+      (<code>.pfvyaz</code> format 2, older files still load).<br>
+      <b>v3.8.0</b> — new <b>🔬 Manual DSC</b> view (baseline-subtracted and
+      derivative traces, detection restricted to a window, limits in °C or minutes); scans can be
+      switched on and off in the file list; each scan keeps one colour across list, report and
+      charts; the first report panel can plot against time or temperature; corrected axis units on
+      the DSC thermogram chart; the Peak picker always shows the whole trace.<br>
+      <b>v3.7.0</b> — scientific references moved from the License dialog into a
+      dedicated <b>📚 References</b> menu (with DOI links).<br>
+      <b>v3.6.0</b> — first MFK panel now shades the integrated peak (translucent
+      fill, so overlapping peaks stay visible) and zooms to the chosen integration range; the
+      Activation Energy legend names the shaded band as ± σ; selectable image-export resolution
+      (up to 4× for print); reworked PDF layout — the four MFK panels fill a single page, date and
+      page number sit top-right (removed from the footer), further charts and tables flow to the
+      next pages in panel order.<br>
+      <b>v3.5.0</b> — Peak picker for scans whose peak is not detected
+      automatically, sample mass read from the file header as well as from the file name,
+      charts and tables moved to their own view, export buttons moved to a pinned top toolbar.<br>
+      <b>v3.4.0</b> — unsaved-changes warning on window close, <b>New session</b>
+      reset button, report panels rearranged with a full-width chart on top and the tables below.<br>
+      <b>v3.3.0</b> — English interface, session save/open in the personal
+      <code>.pfvyaz</code> format with destination folder selection.<br>
+      <b>v3.2.0</b> — adjustable peak integration limits per scan (with a return to automatic),
+      settable axis ranges on every chart, full report export (charts + tables) as a single
+      HTML file.<br>
+      <b>v3.1.0</b> — METTLER STARe style report (thermograms with Integral/normalized/Peak,
+      conversion % with °C/% tables, Activation Energy, Iso-Conversion), sample mass per scan,
+      A4 landscape printing, α curve selection, PolyForm Noncommercial 1.0.0 license.<br>
+      <b>v3.0.0</b> — light theme, isothermal prediction t<sub>α</sub>(T), new formats
+      (xlsx/xls/json/asc/prn), column detection by unit and name, automatic ramp extraction,
+      onset–endset baseline, automatic β, automatic calculation after loading, J integral on an
+      interpolated α grid.</p>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// APP META
+// ══════════════════════════════════════════════
+const APP_VERSION = '3.10.0';
+const R_kJ = 8.314e-3;
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let currentMode   = 'sim';
+let uploadedScans = [];   // [{name,beta,betaAuto,T[],t[],alpha[],hf[],nRows,meta}]
+let lastResults   = null;
+let lastBetas     = [];
+let lastScans     = [];
+let lastIso       = null; // {temps:[°C], series:[{alpha,times:[min]}]}
+let isoSelected   = null; // Set of α (2 decimals) shown in the Iso-Conversion panel; null = default
+let charts = {};
+
+const betaColors = ['#0d8a70','#3457d5','#cf4b18','#b7791f','#7048e8','#0b7285','#c2255c','#2f9e44'];
+
+// A scan keeps the same colour everywhere (file list, report, charts) no matter how the
+// analysis reorders it: the colour is bound to the scan object, not to its position.
+let colorSeq = 0;
+function scanColor(s) {
+  if (!s) return betaColors[0];
+  if (s.colorIdx == null) s.colorIdx = colorSeq++;
+  return betaColors[s.colorIdx % betaColors.length];
+}
+function reindexColors() { colorSeq = 0; uploadedScans.forEach(s => { s.colorIdx = colorSeq++; }); }
+
+Chart.defaults.color = '#6b7684';
+Chart.defaults.borderColor = '#e4e9ef';
+Chart.defaults.font.family = "'JetBrains Mono', ui-monospace, monospace";
+Chart.defaults.font.size = 10;
+const GRID = '#eaeef3';
+
+// ══════════════════════════════════════════════
+// MODALS / MODE
+// ══════════════════════════════════════════════
+function openModal(id){ document.getElementById(id).classList.add('visible'); }
+function closeModal(id){ document.getElementById(id).classList.remove('visible'); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-back.visible').forEach(m => m.classList.remove('visible'));
+});
+
+function setMode(m) {
+  currentMode = m;
+  document.getElementById('modeSimBtn').classList.toggle('active', m === 'sim');
+  document.getElementById('modeFileBtn').classList.toggle('active', m === 'file');
+  document.getElementById('simSection').classList.toggle('hidden', m === 'file');
+  document.getElementById('fileSection').classList.toggle('visible', m === 'file');
+}
+
+// ══════════════════════════════════════════════
+// FILE HANDLING (multi-format)
+// ══════════════════════════════════════════════
+function handleFiles(evt) {
+  const files = Array.from(evt.target.files);
+  evt.target.value = '';
+  if (!files.length) return;
+  showParseError(null);
+  Promise.all(files.map(readOneFile)).then(res => {
+    const errs = res.filter(r => r && r.error);
+    if (errs.length) showParseError(errs.map(e => e.error).join(' · '));
+    renderScanList();
+    renderPeakPicker();
+    maybeAutoRun();
+  });
+}
+
+function readOneFile(file) {
+  return new Promise(resolve => {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const reader = new FileReader();
+    reader.onerror = () => resolve({ error: `"${file.name}": read failed` });
+    reader.onload = e => {
+      try {
+        let scan;
+        if (ext === 'xlsx' || ext === 'xls') scan = parseWorkbook(e.target.result, file.name);
+        else if (ext === 'json')             scan = parseJSON(decodeText(e.target.result), file.name);
+        else                                 scan = parseTextTable(decodeText(e.target.result), file.name);
+        addScan(scan);
+        resolve({ ok: true });
+      } catch (err) {
+        resolve({ error: `"${file.name}": ${err.message}` });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function decodeText(buf) {
+  // UTF-8 first; if it produces replacement chars, fall back to latin-1 (METTLER exports)
+  const utf8 = new TextDecoder('utf-8').decode(buf);
+  if (utf8.indexOf('�') === -1) return utf8;
+  return new TextDecoder('windows-1252').decode(buf);
+}
+
+function addScan(scan) {
+  if (scan.enabled == null) scan.enabled = true;
+  const dup = uploadedScans.findIndex(s => s.name === scan.name);
+  if (dup >= 0) { scan.colorIdx = uploadedScans[dup].colorIdx; uploadedScans[dup] = scan; }
+  else uploadedScans.push(scan);
+  scanColor(scan);              // pin the colour at load time
+  markDirty();
+}
+
+// ── XLSX / XLS ──
+function parseWorkbook(buf, filename) {
+  if (typeof XLSX === 'undefined') throw new Error('XLSX library not loaded (connection required)');
+  const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+  let best = null;
+  wb.SheetNames.forEach(n => {
+    const m = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, raw: true });
+    if (!best || m.length > best.length) best = m;
+  });
+  if (!best || best.length < 5) throw new Error('sheet empty or too short');
+  return buildScanFromMatrix(best.map(r => r.map(c => c === undefined || c === null ? '' : c)), filename);
+}
+
+// ── JSON ──
+function parseJSON(text, filename) {
+  const j = JSON.parse(text);
+  let rows = Array.isArray(j) ? j : (j.data || j.rows || j.points || j.scan);
+  if (!Array.isArray(rows)) throw new Error('JSON: expected an array or a data/rows/points property');
+  if (!rows.length) throw new Error('empty JSON');
+  let matrix;
+  if (Array.isArray(rows[0])) {
+    matrix = rows;
+  } else if (typeof rows[0] === 'object') {
+    const keys = Object.keys(rows[0]);
+    matrix = [keys, ...rows.map(r => keys.map(k => r[k]))];
+  } else {
+    throw new Error('JSON: unrecognised structure');
+  }
+  const scan = buildScanFromMatrix(matrix, filename);
+  if (j.beta || j.heating_rate) scan.beta = +(j.beta || j.heating_rate);
+  return scan;
+}
+
+// ── TEXT TABLES (txt/csv/tsv/dat/asc/prn) ──
+function parseTextTable(text, filename) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 5) throw new Error('file too short (< 5 lines)');
+  const sep = detectSep(lines);
+  return buildScanFromMatrix(lines.map(l => splitRow(l, sep)), filename);
+}
+
+function splitRow(r, sep) {
+  return sep === 'space' ? r.trim().split(/\s+/) : r.split(sep).map(c => c.trim());
+}
+
+// Score every candidate separator on real data lines: the winner is the one that
+// yields the most numeric fields per row (a decimal comma then scores badly as sep).
+function detectSep(lines) {
+  const sample = lines.filter(l => (l.match(/\d/g) || []).length > 3).slice(-40);
+  if (!sample.length) return 'space';
+  let best = { sep: 'space', score: -1 };
+  for (const sep of ['\t', ';', ',', 'space', '|']) {
+    const rows = sample.map(l => splitRow(l, sep));
+    const freq = {};
+    rows.forEach(r => { freq[r.length] = (freq[r.length] || 0) + 1; });
+    const n = +Object.keys(freq).sort((a, b) => freq[b] - freq[a])[0];
+    if (!(n >= 2)) continue;
+    const keep = rows.filter(r => r.length === n);
+    // a field counts only if the WHOLE cell is a number; when the comma is the
+    // separator it cannot also be the decimal mark
+    const numRe = sep === ',' ? /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/
+                              : /^[+-]?(\d+[.,]?\d*|[.,]\d+)([eE][+-]?\d+)?$/;
+    let good = 0, tot = 0;
+    keep.forEach(r => r.forEach(c => { tot++; if (numRe.test(String(c).trim())) good++; }));
+    const frac = tot ? good / tot : 0;
+    const score = frac * 100 + Math.min(n, 12);
+    if (frac >= 0.6 && score > best.score) best = { sep, score };
+  }
+  return best.sep;
+}
+
+// ══════════════════════════════════════════════
+// GENERIC MATRIX → SCAN
+// ══════════════════════════════════════════════
+function num(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : NaN;
+  if (v === undefined || v === null) return NaN;
+  let s = String(v).trim().replace(/['"]/g, '');
+  if (!s) return NaN;
+  if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); // 1.234,56
+  else if (s.indexOf(',') >= 0 && s.indexOf('.') < 0) s = s.replace(',', '.');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : NaN;
+}
+
+function buildScanFromMatrix(matrix, filename) {
+  // 1. find the data block: rows that are mostly numeric
+  const isNumRow = r => {
+    if (!r || r.length < 2) return false;
+    const vals = r.map(num);
+    const ok = vals.filter(v => !isNaN(v)).length;
+    return ok >= 2 && ok / r.length >= 0.75;
+  };
+  let dataStart = matrix.findIndex(isNumRow);
+  if (dataStart < 0) throw new Error('no numeric row found');
+
+  const dataRows = [];
+  for (let i = dataStart; i < matrix.length; i++) if (isNumRow(matrix[i])) dataRows.push(matrix[i].map(num));
+  if (dataRows.length < 10) throw new Error(`only ${dataRows.length} numeric rows (min 10)`);
+
+  // column count = most frequent length
+  const freq = {};
+  dataRows.forEach(r => { freq[r.length] = (freq[r.length] || 0) + 1; });
+  const ncols = +Object.keys(freq).sort((a, b) => freq[b] - freq[a])[0];
+  const rows = dataRows.filter(r => r.length === ncols);
+
+  const cols = [];
+  for (let c = 0; c < ncols; c++) cols.push(rows.map(r => r[c]));
+
+  // 2. column mapping — units line → header names → numeric heuristics
+  const headerRows = matrix.slice(Math.max(0, dataStart - 6), dataStart);
+  // the whole preamble may carry metadata (sample mass, method, operator…)
+  const headerText = matrix.slice(0, dataStart).map(r => (r || []).join(' '));
+  let map = mapByUnits(headerRows, ncols) || mapByNames(headerRows, ncols) || {};
+  map = completeMapHeuristic(map, cols);
+  map = validateTimeTemp(map, cols);
+  if (map.T == null) throw new Error('temperature column not identified');
+  if (map.alpha == null && map.hf == null) throw new Error('an alpha or a heat flow column is required');
+
+  // 3. build raw arrays (T in °C, t in s)
+  let T = cols[map.T].slice();
+  if (map.T_isK || looksKelvin(T)) T = T.map(v => v - 273.15);
+  let t = map.t != null ? cols[map.t].slice() : null;
+  if (t && map.t_scale) t = t.map(v => v * map.t_scale);
+  const hf = map.hf != null ? cols[map.hf].slice() : null;
+  const alphaCol = map.alpha != null ? cols[map.alpha].slice() : null;
+
+  // 4. isolate the heating ramp (multi-segment files: heat/cool/heat) — the untouched
+  //    trace is kept in `raw` so the whole run stays inspectable
+  const segAll = { T, t, hf, alpha: alphaCol };
+  const seg = t ? extractHeatingRamp(segAll) : { i0: 0, i1: T.length };
+  const rawTrace = { T: T.slice(), t: t ? t.slice() : null, hf: hf ? hf.map(v => isNaN(v) ? 0 : v) : null,
+    alpha: alphaCol ? alphaCol.slice() : null };
+  const steps = detectSteps(rawTrace.T, rawTrace.t);
+  const sl = (arr) => arr ? arr.slice(seg.i0, seg.i1) : null;
+  const Ts = sl(T), ts = t ? sl(t) : null, hfs = sl(hf), as = sl(alphaCol);
+
+  // 5. conversion
+  let alpha, integ = null, peakError = null;
+  if (as && as.filter(v => !isNaN(v)).length > 5 && Math.max(...as.filter(v => !isNaN(v))) <= 1.5) {
+    const mx = Math.max(...as.filter(v => !isNaN(v)));
+    alpha = monotone(as.map(v => isNaN(v) ? 0 : (mx > 1.5 ? v / 100 : v)));
+  } else if (hfs) {
+    // a failed automatic detection must not discard the file: the trace is kept so the
+    // user can pick the peak by hand in the Peak picker
+    try {
+      integ = alphaFromHeatFlow(hfs, ts || Ts.map((_, i) => i), Ts);
+      alpha = integ.alpha;
+    } catch (e) {
+      peakError = e.message;
+      alpha = Ts.map(() => 0);
+    }
+  } else {
+    throw new Error('conversion could not be derived');
+  }
+
+  // 6. heating rate
+  const betaAuto = ts ? estimateBeta(Ts, ts) : null;
+  const betaFile = betaFromName(filename);
+  const beta = betaAuto || betaFile || null;
+
+  const hfOut = hfs ? hfs.map(v => isNaN(v) ? 0 : v) : derivedHF(alpha, Ts);
+
+  return {
+    name: filename,
+    beta, betaAuto, betaFile,
+    mass: massFromName(filename) ?? massFromText(headerText),
+    massSource: massFromName(filename) != null ? 'file name'
+              : (massFromText(headerText) != null ? 'file header' : null),
+    hfSource: !!integ || !!peakError,        // α comes from peak integration → range editable
+    peakOk: !peakError,                      // false → needs a manual peak selection
+    peakError,
+    intFrom: null, intTo: null,             // manual limits, null = automatic
+    intUnit: 'C',                           // unit of the manual limits: 'C' (°C) or 'min'
+    intAuto: integ ? { from: integ.Tonset, to: integ.Tend, fromMin: integ.tOnset, toMin: integ.tEnd } : null,
+    T: Ts, t: ts, alpha, hf: hfOut, nRows: Ts.length,
+    tSynthetic: !ts,
+    raw: rawTrace,                                   // every step, as recorded
+    steps,                                           // heat / cool / isothermal segments
+    segIndex: stepOfRange(steps, seg.i0, seg.i1 - 1),
+    segFrom: seg.i0, segTo: seg.i1 - 1,              // window used by the analysis (raw indices)
+    meta: {
+      ncols, cols: map,
+      segment: `${Ts[0].toFixed(0)}→${Ts[Ts.length - 1].toFixed(0)} °C`,
+      trimmed: seg.i1 - seg.i0 !== T.length,
+      peak: integ ? `${integ.Tonset.toFixed(0)}–${integ.Tend.toFixed(0)} °C` : null,
+      massSource: null,
+      area: integ ? integ.area : null,
+      Tpeak: integ ? integ.Tpeak : null,
+      source: alphaCol ? 'α column' : 'peak integration'
+    }
+  };
+}
+
+function looksKelvin(T) {
+  const finite = T.filter(v => !isNaN(v));
+  if (!finite.length) return false;
+  return Math.min(...finite) > 250 && Math.max(...finite) < 1300;
+}
+
+function monotone(a) {
+  let mx = 0;
+  return a.map(v => { mx = Math.max(mx, Math.min(v, 1)); return mx; });
+}
+
+function derivedHF(alpha, T) {
+  return alpha.map((v, i) => i === 0 ? 0 : Math.max(0, (v - alpha[i - 1]) / (Math.abs(T[i] - T[i - 1]) || 0.1)));
+}
+
+// ── column mapping by units, e.g. "[s] [mW] [°C]" ──
+function mapByUnits(headerRows, ncols) {
+  for (const row of headerRows) {
+    const cells = row.map(c => String(c == null ? '' : c).trim());
+    const bracket = cells.map(c => (c.match(/\[([^\]]*)\]/) || [null, null])[1]);
+    if (cells.length !== ncols || bracket.filter(b => b !== null).length < 2) continue;
+    const map = {};
+    bracket.forEach((u, i) => {
+      if (u === null) return;
+      const uu = u.trim().toLowerCase().replace(/\s/g, '');
+      if (/^(s|sec|secondi|seconds)$/.test(uu))            { if (map.t == null) { map.t = i; map.t_scale = 1; } }
+      else if (/^(min|minuti|minutes)$/.test(uu))          { if (map.t == null) { map.t = i; map.t_scale = 60; } }
+      else if (/^(h|hr|hours|ore)$/.test(uu))              { if (map.t == null) { map.t = i; map.t_scale = 3600; } }
+      else if (/^(°c|c|degc|celsius)$/.test(uu))           { if (map.T == null) map.T = i; }
+      else if (/^k$/.test(uu))                             { if (map.T == null) { map.T = i; map.T_isK = true; } }
+      else if (/(w|mw|µw|uw|mw\/mg|w\/g|mcal|cal|µv|uv|mv)/.test(uu)) { if (map.hf == null) map.hf = i; }
+      else if (/^(%|-|1|frazione|fraction)$/.test(uu))      { /* ambiguous → left to heuristics */ }
+    });
+    if (map.T != null && (map.hf != null || map.alpha != null)) return map;
+  }
+  return null;
+}
+
+// ── column mapping by header names ──
+const NAME_KEYS = {
+  // NB: a bare "t" is NOT listed here — in DSC exports it means time (see the
+  // case-sensitive check in mapByNames: "T" = temperature, "t" = time).
+  T:     ['tr', 'ts', 'temp', 'temperature', 'temperatura', 'tsample', 'sampletemperature', 'tprogram', 'tref'],
+  alpha: ['alpha', 'α', 'conv', 'conversion', 'conversione', 'degreeofconversion', 'extent', 'x', 'frazione'],
+  hf:    ['hf', 'heat', 'heatflow', 'heatflowendoup', 'dsc', 'dscsignal', 'unsubtracteddsc', 'flux', 'flusso', 'dh', 'dhdt', 'q', 'signal', 'value'],
+  t:     ['time', 'tempo', 'sec', 'seconds', 'secondi', 'min', 'minutes', 'minuti', 'runtime']
+};
+function mapByNames(headerRows, ncols) {
+  for (const row of headerRows) {
+    if (row.length !== ncols) continue;
+    const hs = row.map(c => String(c == null ? '' : c).toLowerCase().replace(/[\s\[\]()°'"\/.,;:-]/g, ''));
+    if (hs.every(h => h === '' || !isNaN(parseFloat(h)))) continue;
+    const raw = row.map(c => String(c == null ? '' : c).trim());
+    const map = {};
+    raw.forEach((r, i) => {
+      if (r === 'T' && map.T == null) map.T = i;
+      else if (r === 't' && map.t == null) map.t = i;
+    });
+    hs.forEach((h, i) => {
+      if (!h || Object.values(map).includes(i)) return;
+      for (const [key, alts] of Object.entries(NAME_KEYS)) {
+        if (map[key] != null) continue;
+        if (alts.some(a => h === a) || alts.some(a => a.length >= 4 && h.startsWith(a))) { map[key] = i; break; }
+      }
+    });
+    if (map.t != null && /min/.test(hs[map.t])) map.t_scale = 60;
+    if (map.T != null && /\bk\b/.test(String(row[map.T]).toLowerCase())) map.T_isK = true;
+    if (map.T != null && (map.hf != null || map.alpha != null)) return map;
+  }
+  return null;
+}
+
+// ── fill missing roles from the numbers themselves ──
+function completeMapHeuristic(map, cols) {
+  const used = () => new Set(Object.entries(map).filter(([k]) => ['T', 't', 'alpha', 'hf', 'index'].includes(k)).map(([, v]) => v));
+  const stat = cols.map(c => {
+    const f = c.filter(v => !isNaN(v));
+    const min = Math.min(...f), max = Math.max(...f);
+    let inc = 0;
+    for (let i = 1; i < f.length; i++) if (f[i] >= f[i - 1]) inc++;
+    const intStep1 = f.length > 2 && f.every((v, i) => i === 0 || Math.abs(v - f[i - 1] - 1) < 1e-9);
+    return { min, max, span: max - min, incFrac: f.length > 1 ? inc / (f.length - 1) : 0, intStep1 };
+  });
+
+  // alpha: within [0,1], monotone
+  if (map.alpha == null) {
+    const cand = stat.map((s, i) => ({ s, i }))
+      .filter(({ s, i }) => !used().has(i) && s.min >= -0.02 && s.max <= 1.02 && s.incFrac > 0.95 && s.span > 0.5);
+    if (cand.length) map.alpha = cand[0].i;
+  }
+  // time / temperature: both are monotone ramps, so tell them apart by testing
+  // which assignment yields a physically plausible heating rate β (K min⁻¹).
+  // NOTE: an index column (0,1,2,…) is indistinguishable from 1 Hz time, so it is
+  // resolved here rather than being claimed up front.
+  if (map.t == null && map.T == null) {
+    const rising = stat.map((s, i) => ({ s, i })).filter(({ s, i }) => !used().has(i) && s.incFrac > 0.99 && s.span > 0);
+    let picked = null;
+    for (const a of rising) for (const b of stat.map((s, i) => ({ s, i }))) {
+      if (a.i === b.i || used().has(b.i)) continue;
+      if (!(b.s.span > 15 && b.s.min > -200 && b.s.max < 1500)) continue;
+      for (const scale of [1, 60]) {
+        const beta = b.s.span / (a.s.span * scale) * 60;
+        if (beta >= 0.2 && beta <= 200) {
+          let score = Math.abs(Math.log(beta / 10));        // prefer β near typical DSC rates
+          if (a.s.min > 1e-6) score += 0.25;                // a time axis usually starts at 0
+          if (!picked || score < picked.score) picked = { t: a.i, T: b.i, scale, score };
+        }
+      }
+    }
+    if (picked) { map.t = picked.t; map.t_scale = map.t_scale || picked.scale; map.T = picked.T; }
+  }
+  // time alone: non-decreasing, starts at/near zero
+  if (map.t == null) {
+    const cand = stat.map((s, i) => ({ s, i }))
+      .filter(({ s, i }) => !used().has(i) && s.incFrac > 0.98 && s.min >= -1e-6 && s.span > 0);
+    if (cand.length) { map.t = cand[0].i; map.t_scale = map.t_scale || 1; }
+  }
+  // temperature: wide span, plausible range
+  if (map.T == null) {
+    const cand = stat.map((s, i) => ({ s, i }))
+      .filter(({ s, i }) => !used().has(i) && s.span > 15 && s.min > -200 && s.max < 1500)
+      .sort((a, b) => b.s.span - a.s.span);
+    if (cand.length) map.T = cand[0].i;
+  }
+  if (map.T != null && !map.T_isK && stat[map.T].min > 250 && stat[map.T].max < 1300) map.T_isK = true;
+  // heat flow: the least monotone column left (a signal, not a ramp or a counter)
+  if (map.hf == null) {
+    const rest = stat.map((s, i) => ({ s, i })).filter(({ i }) => !used().has(i))
+      .sort((a, b) => Math.abs(b.s.incFrac - 0.5) - Math.abs(a.s.incFrac - 0.5));
+    if (rest.length && rest[0].s.incFrac < 0.98) map.hf = rest[0].i;
+  }
+  // anything still unclaimed and counting 0,1,2,… is just a row index
+  if (map.index == null) {
+    const idx = stat.findIndex((s, i) => s.intStep1 && !used().has(i));
+    if (idx >= 0) map.index = idx;
+  }
+  return map;
+}
+
+// Safety net for ambiguous headers ("t" vs "T"): if the mapping implies an absurd
+// heating rate but swapping time and temperature does not, swap them.
+function validateTimeTemp(map, cols) {
+  if (map.t == null || map.T == null) return map;
+  const span = c => {
+    const f = cols[c].filter(v => !isNaN(v));
+    return f.length ? Math.max(...f) - Math.min(...f) : 0;
+  };
+  const scale = map.t_scale || 1;
+  const rate = (ti, Ti) => span(ti) > 0 ? span(Ti) / (span(ti) * scale) * 60 : Infinity;
+  const okBeta = b => b >= 0.1 && b <= 300;
+  if (!okBeta(rate(map.t, map.T)) && okBeta(rate(map.T, map.t))) {
+    const t = map.t; map.t = map.T; map.T = t;
+    delete map.T_isK;
+    const f = cols[map.T].filter(v => !isNaN(v));
+    if (f.length && Math.min(...f) > 250 && Math.max(...f) < 1300) map.T_isK = true;
+  }
+  return map;
+}
+
+// ══════════════════════════════════════════════
+// SIGNAL PROCESSING
+// ══════════════════════════════════════════════
+// Isolate the (first) main heating ramp of a multi-segment run.
+// Split a run into its steps (heating ramps, cooling ramps, isothermal holds). The whole
+// file is kept so the Manual DSC view can show every step, not only the one being analysed.
+function detectSteps(T, t) {
+  const n = T.length;
+  if (n < 20) return [{ i0: 0, i1: n - 1, kind: 'heat', span: T[n - 1] - T[0] }];
+  const sm = smooth(T, Math.max(1, Math.floor(n / 400)));
+  const cuts = [0];
+  for (let i = 2; i < n; i++) {
+    const a = sm[i] - sm[i - 1], b = sm[i - 1] - sm[i - 2];
+    if (a * b < 0 && i - cuts[cuts.length - 1] > 20) cuts.push(i - 1);
+  }
+  cuts.push(n - 1);
+  const steps = [];
+  for (let k = 0; k < cuts.length - 1; k++) {
+    const i0 = cuts[k], i1 = cuts[k + 1];
+    if (i1 - i0 < 10) continue;
+    const span = T[i1] - T[i0];
+    const dtMin = t ? (t[i1] - t[i0]) / 60 : null;
+    const rate = dtMin ? span / dtMin : null;                    // K min⁻¹
+    const kind = Math.abs(span) < 2 ? 'iso' : (span > 0 ? 'heat' : 'cool');
+    steps.push({ i0, i1, kind, span, rate, dtMin, T0: T[i0], T1: T[i1] });
+  }
+  return steps.length ? steps : [{ i0: 0, i1: n - 1, kind: 'heat', span: T[n - 1] - T[0] }];
+}
+
+// index of the step the analysis uses, given the trimmed window returned by extractHeatingRamp
+function stepOfRange(steps, i0, i1) {
+  let best = 0, cover = -1;
+  steps.forEach((st, k) => {
+    const ov = Math.min(st.i1, i1) - Math.max(st.i0, i0);
+    if (ov > cover) { cover = ov; best = k; }
+  });
+  return best;
+}
+
+function extractHeatingRamp(d) {
+  const T = d.T, n = T.length;
+  if (n < 40) return { i0: 0, i1: n };
+  const sm = smooth(T, Math.max(1, Math.floor(n / 400)));
+  const segs = [];
+  let start = 0;
+  for (let i = 2; i < n; i++) {
+    const a = sm[i] - sm[i - 1], b = sm[i - 1] - sm[i - 2];
+    if (a * b < 0) { if (i - start > 20) segs.push([start, i]); start = i - 1; }
+  }
+  segs.push([start, n]);
+  const heats = segs.filter(([a, b]) => T[b - 1] - T[a] > 20);
+  if (!heats.length) return { i0: 0, i1: n };
+  const maxSpan = Math.max(...heats.map(([a, b]) => T[b - 1] - T[a]));
+  const good = heats.filter(([a, b]) => T[b - 1] - T[a] > 0.9 * maxSpan).sort((x, y) => x[0] - y[0]);
+  let [i0, i1] = good[0];
+  // trim instrument transients at the ends of the segment
+  const L = i1 - i0;
+  i0 += Math.floor(0.04 * L);
+  i1 -= Math.floor(0.02 * L);
+  if (i1 - i0 < 20) return { i0: 0, i1: n };
+  return { i0, i1 };
+}
+
+function smooth(a, w) {
+  if (w < 1) return a.slice();
+  const out = new Array(a.length);
+  for (let i = 0; i < a.length; i++) {
+    let s = 0, c = 0;
+    for (let j = Math.max(0, i - w); j <= Math.min(a.length - 1, i + w); j++) { const v = a[j]; if (!isNaN(v)) { s += v; c++; } }
+    out[i] = c ? s / c : a[i];
+  }
+  return out;
+}
+
+// α from heat flow: peak found by local prominence (immune to start-up transients
+// and baseline drift), linear onset→endset baseline, cumulative trapezoid over time.
+// fromC/toC (°C) override the automatic onset/endset when supplied.
+function alphaFromHeatFlow(hfRaw, t, T, fromV, toV, unit) {
+  const n = hfRaw.length;
+  const hf0 = hfRaw.map(v => isNaN(v) ? 0 : v);
+  const sm = smooth(hf0, Math.max(1, Math.floor(n / 200)));
+
+  // prominence vs a chord spanning ±15% of the ramp
+  const w = Math.max(3, Math.floor(0.15 * n));
+  const prom = sm.map((v, i) => v - 0.5 * (sm[Math.max(0, i - w)] + sm[Math.min(n - 1, i + w)]));
+  let pu = 0, pd = 0;
+  for (let i = 1; i < n; i++) { if (prom[i] > prom[pu]) pu = i; if (prom[i] < prom[pd]) pd = i; }
+
+  // exothermic direction = the more prominent one (exo-up vs exo-down instruments)
+  const sign = prom[pu] >= -prom[pd] ? 1 : -1;
+  const pk = sign > 0 ? pu : pd;
+  const sig = sm.map(v => sign * v);
+
+  // a bump that barely rises above the noise is not a peak — but never reject the scan
+  // when the user has supplied the limits by hand. Signal-to-noise = peak prominence over
+  // the robust spread (MAD) of the signal around a global linear baseline.
+  const auto = (fromV == null || !isFinite(fromV)) && (toV == null || !isFinite(toV));
+  if (auto) {
+    // high-frequency noise = smoothing residual (independent of the peak's own amplitude)
+    const noise = mad(hf0.map((v, i) => v - sm[i])) || 1e-9;
+    if (Math.abs(prom[pk]) < 6 * noise)
+      throw new Error('no peak stands out from the baseline noise (low signal-to-noise)');
+  }
+
+  // onset/endset = lowest signal within ±35% of the ramp around the peak
+  const w2 = Math.max(5, Math.floor(0.35 * n));
+  let i0 = Math.max(0, pk - w2), i1 = Math.min(n - 1, pk + w2);
+  for (let i = Math.max(0, pk - w2); i <= pk; i++) if (sig[i] < sig[i0]) i0 = i;
+  for (let i = pk; i <= Math.min(n - 1, pk + w2); i++) if (sig[i] < sig[i1]) i1 = i;
+  if (i1 - i0 < 5) { i0 = 0; i1 = n - 1; }
+
+  // manual integration limits win over the automatic ones — expressed in °C or in minutes
+  const manual = { from: fromV, to: toV };
+  const mi0 = limitToIndex(T, t, fromV, unit), mi1 = limitToIndex(T, t, toV, unit);
+  if (mi0 != null) i0 = mi0;
+  if (mi1 != null) i1 = mi1;
+  if (i1 <= i0) throw new Error('invalid integration limits (end ≤ start)');
+
+  const yb0 = sig[i0], yb1 = sig[i1];
+  const slope = (yb1 - yb0) / ((t[i1] - t[i0]) || 1);
+  const corr = i => Math.max(0, sig[i] - (yb0 + slope * (t[i] - t[i0])));
+
+  const cum = new Array(n).fill(0);
+  for (let i = 1; i < n; i++) {
+    if (i <= i0 || i > i1) { cum[i] = cum[i - 1]; continue; }
+    cum[i] = cum[i - 1] + 0.5 * (corr(i) + corr(i - 1)) * (t[i] - t[i - 1]);
+  }
+  const total = cum[n - 1];
+  if (!(total > 0)) throw new Error('no integrable exothermic peak');
+  return {
+    alpha: monotone(cum.map(v => v / total)),
+    area: total, Tonset: T[i0], Tend: T[i1], Tpeak: T[pk], exoUp: sign > 0,
+    tOnset: (t[i0] - t[0]) / 60, tEnd: (t[i1] - t[0]) / 60,
+    manual: manual.from != null || manual.to != null
+  };
+}
+
+// median absolute deviation — robust spread that a few outliers do not inflate
+function mad(a) {
+  if (!a.length) return 0;
+  const med = q => { const s = q.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  const m = med(a);
+  return med(a.map(v => Math.abs(v - m)));
+}
+
+// minutes since the start of the scan, for limits expressed as a time
+function minutesAxis(t) { const t0 = t && t.length ? t[0] : 0; return (t || []).map(v => (v - t0) / 60); }
+
+// resolve an integration limit (°C or min) to a point index of the scan
+function limitToIndex(T, t, value, unit) {
+  if (value == null || !isFinite(value)) return null;
+  return unit === 'min' ? nearestIndex(minutesAxis(t), value) : nearestIndex(T, value);
+}
+
+// index of the point closest to a given temperature
+function nearestIndex(T, Tc) {
+  let best = 0, d = Infinity;
+  for (let i = 0; i < T.length; i++) {
+    const dd = Math.abs(T[i] - Tc);
+    if (dd < d) { d = dd; best = i; }
+  }
+  return best;
+}
+
+// Rebuild a scan from a different step of the same file. Used when the exothermic peak the
+// analysis needs sits in another segment of the run (a second heating, say).
+function applySegment(scan, k, keepLimits) {
+  if (!scan.raw || !scan.steps || !scan.steps[k]) return scan;
+  const st = scan.steps[k];
+  // trim the instrument transients at the ends, as the automatic extraction does
+  const L = st.i1 - st.i0;
+  let i0 = st.i0 + Math.floor(0.04 * L), i1 = st.i1 - Math.floor(0.02 * L);
+  if (i1 - i0 < 20) { i0 = st.i0; i1 = st.i1; }
+  return applyRawWindow(scan, i0, i1, k, keepLimits);
+}
+
+// Rebuild a scan from an arbitrary window of the raw trace (raw indices, inclusive).
+function applyRawWindow(scan, i0, i1, k, keepLimits) {
+  const raw = scan.raw;
+  if (!raw) return scan;
+  i0 = Math.max(0, Math.min(i0, raw.T.length - 2));
+  i1 = Math.max(i0 + 10, Math.min(i1, raw.T.length - 1));
+  scan.T = raw.T.slice(i0, i1 + 1);
+  scan.t = raw.t ? raw.t.slice(i0, i1 + 1) : null;
+  scan.hf = raw.hf ? raw.hf.slice(i0, i1 + 1) : scan.hf.slice(i0, i1 + 1);
+  scan.nRows = scan.T.length;
+  scan.segFrom = i0; scan.segTo = i1;
+  if (k != null) scan.segIndex = k;
+  scan.tSynthetic = !scan.t;
+  if (!scan.t) scan.t = scan.T.map((T, j) => j);        // placeholder, _run rebuilds it from β
+  if (!keepLimits) { scan.intFrom = null; scan.intTo = null; }
+  scan.meta = Object.assign({}, scan.meta, {
+    segment: `${scan.T[0].toFixed(0)}→${scan.T[scan.T.length - 1].toFixed(0)} °C`,
+    trimmed: true
+  });
+  // β follows the new window
+  const b = scan.t ? estimateBeta(scan.T, scan.t) : null;
+  if (b) { scan.betaAuto = b; scan.beta = b; }
+  applyIntegration(scan);
+  return scan;
+}
+
+// re-integrate a scan with its current (manual or automatic) limits
+function applyIntegration(scan) {
+  if (!scan.hfSource) return scan;
+  try {
+    const res = alphaFromHeatFlow(scan.hf, scan.t, scan.T, scan.intFrom, scan.intTo, scan.intUnit || 'C');
+    scan.alpha = res.alpha;
+    scan.meta = Object.assign({}, scan.meta, {
+      area: res.area, Tpeak: res.Tpeak,
+      peak: `${res.Tonset.toFixed(0)}–${res.Tend.toFixed(0)} °C`,
+      manualRange: res.manual
+    });
+    scan.intAuto = { from: res.Tonset, to: res.Tend, fromMin: res.tOnset, toMin: res.tEnd };
+    scan.peakOk = true; scan.peakError = null;
+  } catch (e) {
+    // keep the scan loaded: the Peak picker lets the user place the limits by hand
+    scan.peakOk = false; scan.peakError = e.message;
+    scan.alpha = scan.T.map(() => 0);
+    scan.meta = Object.assign({}, scan.meta, { area: null, Tpeak: null, peak: null });
+  }
+  return scan;
+}
+
+// β (K/min) from a least-squares fit of T vs t
+function estimateBeta(T, t) {
+  const n = T.length;
+  if (n < 5 || !t) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, m = 0;
+  for (let i = 0; i < n; i++) {
+    if (isNaN(T[i]) || isNaN(t[i])) continue;
+    sx += t[i]; sy += T[i]; sxx += t[i] * t[i]; sxy += t[i] * T[i]; m++;
+  }
+  if (m < 5) return null;
+  const den = m * sxx - sx * sx;
+  if (Math.abs(den) < 1e-12) return null;
+  const slope = (m * sxy - sx * sy) / den;   // K/s
+  const beta = slope * 60;
+  if (!(beta > 0.01) || beta > 500) return null;
+  return snapBeta(beta);
+}
+
+function snapBeta(b) {
+  const nice = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10, 12.5, 15, 20, 25, 30, 35, 40, 50];
+  for (const v of nice) if (Math.abs(b - v) / v < 0.04) return v;
+  return +b.toFixed(2);
+}
+
+// sample mass (mg) from the file header, e.g. "Sample mass: 11.4700 mg", "Weight [mg] 11,47"
+function massFromText(lines) {
+  for (const raw of lines) {
+    const line = String(raw == null ? '' : raw);
+    if (!/\d/.test(line)) continue;
+    // "<label> … <number> mg"  — the unit may sit in the label instead of after the value
+    // "<mass-word> … <number> [mg|g]" — allow a few words between the label and the value
+    let m = line.match(/(?:sample\s*)?(?:mass|weight|peso|massa|gewicht|einwaage)\b[^\d\n]{0,20}?(-?\d+(?:[.,]\d+)?)\s*(mg|g)?\b/i);
+    if (!m) {
+      m = line.match(/(-?\d+(?:[.,]\d+)?)\s*(mg|g)\b/i);   // bare "11.47 mg" / "0.0123 g"
+    }
+    if (m && !m[2]) {
+      // no unit next to the number: take it from an [mg]/[g] tag elsewhere on the line
+      const u = line.match(/\[\s*(mg|g)\s*\]|\(\s*(mg|g)\s*\)/i);
+      m[2] = u ? (u[1] || u[2]) : 'mg';
+    }
+    if (!m) continue;
+    let v = parseFloat(String(m[1]).replace(',', '.'));
+    if (!isFinite(v)) continue;
+    if (/^g$/i.test(m[2] || '')) v *= 1000;              // grams → mg
+    if (v > 0 && v < 10000) return +v.toFixed(4);
+  }
+  return null;
+}
+
+// sample mass (mg) if the file name carries it, e.g. "… , 11,4700 mg"
+function massFromName(name) {
+  const m = name.match(/(\d+(?:[.,]\d+)?)\s*mg\b/i);
+  return m ? +m[1].replace(',', '.') : null;
+}
+
+function betaFromName(name) {
+  const m = name.match(/(\d+(?:[.,]\d+)?)\s*(?:°|deg)?\s*[CK]?\s*[_\-\s]*\/?\s*min/i);
+  if (m) return +m[1].replace(',', '.');
+  const m2 = name.match(/beta[_\-\s]*(\d+(?:[.,]\d+)?)/i);
+  if (m2) return +m2[1].replace(',', '.');
+  return null;
+}
+
+// ── scan list UI ──
+function renderScanList() {
+  const list = document.getElementById('scanList');
+  if (!uploadedScans.length) {
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:14px 0">No file loaded</div>';
+    return;
+  }
+  const nOn = uploadedScans.filter(s => s.enabled !== false).length;
+  list.innerHTML = uploadedScans.map((s, i) => `
+    <div class="scan-row${s.enabled === false ? ' off' : ''}">
+      <div class="scan-row-header">
+        <input type="checkbox" class="scan-on" ${s.enabled === false ? '' : 'checked'}
+               title="Include this scan in the analysis"
+               onchange="toggleScan(${i}, this.checked)">
+        <div class="scan-dot" style="background:${scanColor(s)}"></div>
+        <span class="scan-name" title="${esc(s.name)}">${esc(s.name)}</span>
+        <button class="scan-remove" onclick="removeScan(${i})">✕</button>
+      </div>
+      <div class="scan-row-inputs">
+        <label>β (K min⁻¹):</label>
+        <input type="number" value="${s.beta ?? ''}" placeholder="e.g. 10" step="0.5" min="0.1"
+               onchange="uploadedScans[${i}].beta = +this.value; markDirty()">
+        <label>m (mg):</label>
+        <input type="number" value="${s.mass ?? ''}" placeholder="e.g. 11.3" step="0.1" min="0.01"
+               onchange="uploadedScans[${i}].mass = +this.value || null; markDirty(); if (lastResults) runAll();">
+        <span class="scan-nrows">${s.nRows} pt ${s.enabled === false ? '—' : '✓'}</span>
+      </div>
+      <div class="scan-meta">
+        ramp <b>${s.meta.segment}</b>${s.meta.trimmed ? ' (segment extracted)' : ''}
+        ${s.betaAuto ? ` · β <span class="auto-tag">auto ${s.betaAuto}</span>` : (s.betaFile ? ` · β from file name ${s.betaFile}` : '')}
+        ${s.mass > 0 && s.massSource ? ` · m <span class="auto-tag">auto ${s.mass} mg (${s.massSource})</span>` : ''}
+        <br>α from ${s.meta.source}${s.meta.peak ? ` · peak ${s.meta.peak}${s.meta.area != null ? ` · area ${s.meta.area.toFixed(1)}` : ''}`
+          : (s.peakOk === false ? ' · <b style="color:var(--accent2)">peak not found — use the Peak picker</b>' : '')}
+      </div>
+    </div>`).join('')
+    + `<div class="scan-count">${nOn} of ${uploadedScans.length} scan${uploadedScans.length > 1 ? 's' : ''} active
+        ${uploadedScans.length ? `· <button class="iso-mini" onclick="enableAllScans(true)">all</button>
+        <button class="iso-mini" onclick="enableAllScans(false)">none</button>` : ''}</div>`;
+}
+
+// enable/disable a scan for the analysis (the file stays loaded)
+function toggleScan(i, on) {
+  const s = uploadedScans[i]; if (!s) return;
+  s.enabled = !!on;
+  markDirty();
+  renderScanList();
+  if (activeScans().length >= 3) runAll(); else clearResults();
+}
+function enableAllScans(on) {
+  uploadedScans.forEach(s => { s.enabled = !!on; });
+  markDirty();
+  renderScanList();
+  if (activeScans().length >= 3) runAll(); else clearResults();
+}
+// scans taking part in the analysis
+function activeScans() { return uploadedScans.filter(s => s.enabled !== false); }
+
+// hide the results without touching the loaded files
+function clearResults() {
+  lastResults = null; lastIso = null; lastScans = []; lastBetas = [];
+  Object.keys(charts).forEach(k => { if (k !== 'peak') dc(k); });
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('placeholder').style.display = '';
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function removeScan(i) {
+  uploadedScans.splice(i, 1);
+  markDirty();
+  renderScanList();
+  renderPeakPicker();
+  if (activeScans().length >= 3) runAll(); else clearResults();
+}
+function showParseError(msg) {
+  const el = document.getElementById('parseError');
+  if (!msg) { el.classList.remove('visible'); el.textContent = ''; }
+  else { el.classList.add('visible'); el.textContent = msg; }
+}
+
+function maybeAutoRun() {
+  if (!document.getElementById('autoRun').checked) return;
+  if (currentMode !== 'file') return;
+  const active = activeScans();
+  if (active.length < 3) return;
+  if (active.some(s => !s.beta || isNaN(s.beta) || s.beta <= 0)) return;
+  if (new Set(active.map(s => s.beta)).size < 3) return;
+  runAll();
+}
+
+// ══════════════════════════════════════════════
+// SIMULATION ENGINE
+// ══════════════════════════════════════════════
+function kineticRate(alpha, T_K, p) {
+  const kc = 1e6 * Math.exp(-p.Ea_chem / (R_kJ * T_K));
+  const f = (0.05 * kc + kc * Math.pow(Math.max(alpha, 1e-6), p.m_cat)) *
+            Math.pow(Math.max(1 - alpha, 1e-6), 1.5);
+  const diff = alpha >= p.alpha_gel ? 1 / (1 + Math.exp(15 * (alpha - p.alpha_gel - 0.05))) : 1.0;
+  return f * diff;
+}
+
+function simulateDSC(beta_Kmin, p) {
+  const T0K = p.T0_C + 273.15, TendK = p.Tend_C + 273.15, bS = beta_Kmin / 60;
+  const dt = (TendK - T0K) / (bS * 1500);
+  const T = [], t = [], alpha = [], hf = [];
+  let a = 0.001, ti = 0;
+  for (let i = 0; i <= 1500; i++) {
+    const TK = T0K + bS * ti; if (TK > TendK) break;
+    const r = kineticRate(a, TK, p);
+    T.push(TK - 273.15); t.push(ti); alpha.push(Math.min(a, 0.9999)); hf.push(r * p.dH_total);
+    a = Math.min(a + r * dt, 0.9999); ti += dt;
+  }
+  return { name: `β=${beta_Kmin}`, beta: beta_Kmin, T, t, alpha, hf, nRows: T.length, meta: { segment: '', source: 'simulazione' } };
+}
+
+// ══════════════════════════════════════════════
+// VYAZOVKIN CORE
+// ══════════════════════════════════════════════
+function interpolateAtAlpha(scan, av) {
+  const { T, t, alpha } = scan;
+  for (let i = 1; i < alpha.length; i++) {
+    if (alpha[i] >= av) {
+      const d = alpha[i] - alpha[i - 1];
+      const f = d === 0 ? 0 : (av - alpha[i - 1]) / d;
+      return { t: t[i - 1] + f * (t[i] - t[i - 1]), T: T[i - 1] + f * (T[i] - T[i - 1]) + 273.15 };
+    }
+  }
+  return null;
+}
+
+const NP_GRID = 40;
+// interpolated (t,T) grid across [aL, aH] — accurate J even with sparse raw sampling
+function alphaGrid(scan, aL, aH) {
+  const g = [];
+  for (let k = 0; k <= NP_GRID; k++) {
+    const p = interpolateAtAlpha(scan, aL + (aH - aL) * k / NP_GRID);
+    if (!p) return null;
+    g.push(p);
+  }
+  return g;
+}
+
+function computeJgrid(g, Ea) {
+  let J = 0;
+  for (let i = 1; i < g.length; i++) {
+    const a = Math.exp(-Ea / (R_kJ * g[i - 1].T)), b = Math.exp(-Ea / (R_kJ * g[i].T));
+    J += 0.5 * (a + b) * (g[i].t - g[i - 1].t);
+  }
+  return Math.max(J, 1e-300);
+}
+
+function PhiGrids(Ea, grids) {
+  const J = grids.map(g => computeJgrid(g, Ea));
+  let p = 0;
+  for (let i = 0; i < J.length; i++) for (let j = 0; j < J.length; j++) if (i !== j) p += J[i] / J[j];
+  return p;
+}
+
+function goldenMin(f, a, b, tol = 0.02) {
+  const g = (Math.sqrt(5) - 1) / 2;
+  let c = b - g * (b - a), d = a + g * (b - a), it = 0;
+  while (Math.abs(b - a) > tol && it < 300) {
+    if (f(c) < f(d)) b = d; else a = c;
+    c = b - g * (b - a); d = a + g * (b - a); it++;
+  }
+  return (a + b) / 2;
+}
+
+function kasEa(scans, betas, av) {
+  const pts = [];
+  for (let k = 0; k < scans.length; k++) {
+    const p = interpolateAtAlpha(scans[k], av); if (!p) continue;
+    pts.push({ x: 1 / p.T, y: Math.log(betas[k] / (p.T * p.T)) });
+  }
+  if (pts.length < 3) return null;
+  const n = pts.length;
+  const sx = pts.reduce((s, p) => s + p.x, 0), sy = pts.reduce((s, p) => s + p.y, 0);
+  const sxx = pts.reduce((s, p) => s + p.x * p.x, 0), sxy = pts.reduce((s, p) => s + p.x * p.y, 0);
+  const den = n * sxx - sx * sx;
+  if (Math.abs(den) < 1e-30) return null;
+  return -(n * sxy - sx * sy) / den * R_kJ;
+}
+
+function interpretPhase(a, gel) {
+  if (a <= 0.10) return { label: 'Initiation',       color: '#3457d5' };
+  if (a <= 0.30) return { label: 'Autocatalysis',    color: '#0d8a70' };
+  if (a <  gel)  return { label: 'Chemical control', color: '#2f9e44' };
+  if (a <  gel + 0.1) return { label: 'Gelation', color: '#b7791f' };
+  return { label: 'Diffusion control', color: '#cf4b18' };
+}
+
+// ── isothermal prediction: t_α(T0) = ∫₀^{Tα} exp(−E/RT)dT / (β·exp(−E/R·T0)) ──
+function isothermalPrediction(refScan, refBeta, results, Tmin, Tmax) {
+  const temps = [];
+  const step = Math.max(1, Math.round((Tmax - Tmin) / 40));
+  for (let Tc = Tmin; Tc <= Tmax + 1e-9; Tc += step) temps.push(+Tc.toFixed(1));
+
+  const T = refScan.T, alpha = refScan.alpha;
+  const series = results.map(r => {
+    const E = r.Ea_vyaz;
+    // ∫ from scan start to T_alpha, over the reference scan temperature grid
+    const p = interpolateAtAlpha(refScan, r.alpha);
+    if (!p) return null;
+    const Talpha = p.T; // K
+    let I = 0;
+    for (let i = 1; i < T.length; i++) {
+      const Ta = T[i - 1] + 273.15, Tb = Math.min(T[i] + 273.15, Talpha);
+      if (Tb <= Ta) continue;
+      I += 0.5 * (Math.exp(-E / (R_kJ * Ta)) + Math.exp(-E / (R_kJ * Tb))) * (Tb - Ta);
+      if (T[i] + 273.15 >= Talpha) break;
+    }
+    const times = temps.map(Tc => {
+      const tt = I / (refBeta * Math.exp(-E / (R_kJ * (Tc + 273.15))));
+      return isFinite(tt) && tt > 0 ? tt : null;
+    });
+    return { alpha: r.alpha, Ea: E, times };
+  }).filter(Boolean);
+
+  return { temps, series };
+}
+
+// ══════════════════════════════════════════════
+// MAIN RUN
+// ══════════════════════════════════════════════
+function runAll() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> RUNNING...';
+  setTimeout(() => {
+    try { _run(); }
+    catch (e) { console.error(e); showParseError('Calculation error: ' + e.message); alert('Error: ' + e.message); }
+    btn.disabled = false; btn.innerHTML = '▶ RUN VYAZOVKIN';
+  }, 60);
+}
+
+function _run() {
+  const dAlpha = clamp(+document.getElementById('dAlpha').value || 0.05, 0.02, 0.2);
+  let scans, betas, alpha_gel = 0.70;
+
+  if (currentMode === 'file') {
+    const active = activeScans();
+    if (active.length < 3) { alert('At least 3 active DSC scans are required.'); return; }
+    const miss = active.filter(s => !s.beta || isNaN(s.beta) || s.beta <= 0);
+    if (miss.length) { alert(`Enter β for: ${miss.map(s => s.name).join(', ')}`); return; }
+    // scans whose peak was not found are held back until the user places the limits
+    active.forEach(s => { if (s.hfSource) { try { applyIntegration(s); } catch (e) {} } });
+    renderPeakPicker();
+    const pending = active.filter(s => s.peakOk === false);
+    if (active.length - pending.length < 3) {
+      document.getElementById('placeholder').style.display = 'none';
+      document.getElementById('results').style.display = 'none';
+      showParseError(`Peak not detected in ${pending.length} scan${pending.length > 1 ? 's' : ''}: `
+        + `set the integration limits in the Peak picker below.`);
+      return;
+    }
+    scans = active.filter(s => s.peakOk !== false)
+                  .map(s => ({ ...s, srcIndex: uploadedScans.indexOf(s) }));
+    betas = scans.map(s => s.beta);
+    // synthesise a time axis when the file has none: t = (T−T0)·60/β
+    scans.forEach((s, i) => {
+      if (!s.t || s.tSynthetic) s.t = s.T.map(T => (T - s.T[0]) * 60 / betas[i]);
+    });
+  } else {
+    const p = {
+      dH_total: +document.getElementById('dH').value,
+      T0_C: +document.getElementById('T0').value,
+      Tend_C: +document.getElementById('Tend').value,
+      Ea_chem: +document.getElementById('Ea_chem').value,
+      Ea_diff: +document.getElementById('Ea_diff').value,
+      alpha_gel: (alpha_gel = +document.getElementById('alpha_gel').value),
+      m_cat: +document.getElementById('m_cat').value
+    };
+    betas = [+document.getElementById('b1').value, +document.getElementById('b2').value,
+             +document.getElementById('b3').value, +document.getElementById('b4').value].filter(b => b > 0);
+    if (betas.length < 3) { alert('At least 3 heating rates β are required.'); return; }
+    scans = betas.map(b => simulateDSC(b, p));
+  }
+
+  // sort by β ascending
+  const combined = betas.map((b, i) => ({ b, s: scans[i] })).sort((a, z) => a.b - z.b);
+  betas = combined.map(x => x.b); scans = combined.map(x => x.s);
+
+  const alphaSteps = [];
+  for (let a = dAlpha; a < 1 - dAlpha / 2; a += dAlpha) alphaSteps.push(+a.toFixed(4));
+
+  const results = [];
+  alphaSteps.forEach(alpha => {
+    const aL = Math.max(0.0005, alpha - dAlpha), aH = alpha;
+    const grids = scans.map(s => alphaGrid(s, aL, aH));
+    if (grids.some(g => !g)) return;           // α not reached in every scan → skip
+    const Ev = goldenMin(E => PhiGrids(E, grids), 5, 400, 0.04);
+
+    // dispersion: spread of the pairwise (two-scan) isoconversional estimates
+    //   Ea_ij = −R·[ln(βi/Ti²) − ln(βj/Tj²)] / (1/Ti − 1/Tj)
+    const pe = [];
+    for (let i = 0; i < scans.length; i++) for (let j = i + 1; j < scans.length; j++) {
+      const pi = interpolateAtAlpha(scans[i], alpha), pj = interpolateAtAlpha(scans[j], alpha);
+      if (pi && pj && Math.abs(1 / pi.T - 1 / pj.T) > 1e-9) {
+        const yi = Math.log(betas[i] / (pi.T * pi.T)), yj = Math.log(betas[j] / (pj.T * pj.T));
+        const Ep = -R_kJ * (yi - yj) / (1 / pi.T - 1 / pj.T);
+        if (Ep > 0 && Ep < 600) pe.push(Ep);
+      }
+    }
+    const mean = pe.length ? pe.reduce((s, e) => s + e, 0) / pe.length : Ev;
+    const sigma = pe.length > 1
+      ? +Math.sqrt(pe.reduce((s, e) => s + (e - mean) ** 2, 0) / (pe.length - 1)).toFixed(2)
+      : 2.0;
+    const Ek = kasEa(scans, betas, alpha);
+    const T_alpha = scans.map(s => { const p = interpolateAtAlpha(s, alpha); return p ? +(p.T - 273.15).toFixed(1) : null; });
+    // a minimum sitting on the search bounds means Φ never converged: no real minimum
+    const unbounded = Ev < 6 || Ev > 394;
+    results.push({ alpha, Ea_vyaz: +Ev.toFixed(2), Ea_kas: Ek ? +Ek.toFixed(2) : null, sigma, T_alpha, unbounded, phase: interpretPhase(alpha, alpha_gel) });
+  });
+
+  if (!results.length) throw new Error('no valid isoconversional point — check the α curves');
+
+  lastResults = results; lastBetas = betas; lastScans = scans;
+
+  const Tmin = +document.getElementById('isoTmin').value || 80;
+  const Tmax = Math.max(Tmin + 20, +document.getElementById('isoTmax').value || 200);
+  lastIso = isothermalPrediction(scans[0], betas[0], results, Tmin, Tmax);
+  if (isoSelected) {
+    const valid = new Set(lastIso.series.map(s => aKey(s.alpha)));
+    isoSelected = new Set([...isoSelected].filter(k => valid.has(k)));
+    if (!isoSelected.size) isoSelected = null;   // α grid changed → back to the default set
+  }
+
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('results').style.display = 'block';
+  renderPhaseStrip(results, alpha_gel);
+  renderReport(scans, betas, results);
+  renderDSCtime(scans, betas);
+  renderConv(scans, betas);
+  renderDSC(scans, betas);
+  renderAlpha(scans, betas);
+  renderEa(results);
+  renderIsoPicker(lastIso);
+  renderIso(lastIso);
+  renderCompare(results);
+  renderPhi(scans, results, dAlpha);
+  renderTable(results, betas);
+  renderIsoTable(lastIso);
+  renderRawData(scans, betas);
+  renderStatus(results, betas, dAlpha);
+  if (currentView === 'manual') renderManual();
+}
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// ══════════════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════════════
+function dc(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+// ── manual axis ranges, one entry per chart ──
+const axisState = {};        // key → {xmin,xmax,ymin,ymax} (null = auto)
+const chartMeta = {};        // key → {canvas, label}
+
+function mkChart(key, canvasId, cfg, label) {
+  dc(key);
+  chartMeta[key] = { canvas: canvasId, label: label || key };
+  if (!axisState[key]) axisState[key] = { xmin: null, xmax: null, ymin: null, ymax: null };
+  applyAxisToConfig(key, cfg);
+  charts[key] = new Chart(document.getElementById(canvasId), cfg);
+  renderAxisBar(key);
+  return charts[key];
+}
+
+function applyAxisToConfig(key, cfg) {
+  const a = axisState[key]; if (!a || !cfg.options || !cfg.options.scales) return;
+  const sx = cfg.options.scales.x, sy = cfg.options.scales.y;
+  // remember the bounds written in the chart definition: an "auto" reset restores these,
+  // not the values the user typed
+  [[sx, 'xmin', 'xmax'], [sy, 'ymin', 'ymax']].forEach(([sc, kMin, kMax]) => {
+    if (!sc) return;
+    sc._defMin = sc.min; sc._defMax = sc.max;
+    sc.min = a[kMin] != null ? a[kMin] : sc._defMin;
+    sc.max = a[kMax] != null ? a[kMax] : sc._defMax;
+    if (sc.min === undefined) delete sc.min;
+    if (sc.max === undefined) delete sc.max;
+  });
+}
+
+function setAxis(key, field, val) {
+  const v = val === '' || val == null ? null : +val;
+  axisState[key][field] = (v == null || isNaN(v)) ? null : v;
+  const c = charts[key]; if (!c) return;
+  const a = axisState[key];
+  [[c.options.scales.x, 'xmin', 'xmax'], [c.options.scales.y, 'ymin', 'ymax']].forEach(([sc, kMin, kMax]) => {
+    if (!sc) return;
+    sc.min = a[kMin] != null ? a[kMin] : sc._defMin;
+    sc.max = a[kMax] != null ? a[kMax] : sc._defMax;
+  });
+  c.update();
+  renderAxisBar(key);
+}
+
+function resetAxis(key) {
+  axisState[key] = { xmin: null, xmax: null, ymin: null, ymax: null };
+  setAxis(key, 'xmin', '');
+}
+
+// control strip injected right after each canvas
+function renderAxisBar(key) {
+  const cv = document.getElementById(chartMeta[key].canvas);
+  if (!cv || !cv.parentNode || !cv.parentNode.querySelector) return;   // headless / canvas rimosso
+  let bar = cv.parentNode.querySelector(`.axis-bar[data-k="${key}"]`);
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'axis-bar'; bar.dataset.k = key;
+    cv.parentNode.insertBefore(bar, cv.nextSibling);
+  }
+  const c = charts[key]; if (!c) return;
+  const a = axisState[key];
+  const auto = (sc, w) => { const v = w === 'min' ? sc.min : sc.max; return v == null || !isFinite(v) ? '' : (+v).toPrecision(4).replace(/\.?0+$/, ''); };
+  const manual = a.xmin != null || a.xmax != null || a.ymin != null || a.ymax != null;
+  bar.innerHTML =
+    `<span class="ax-lab">assi</span>
+     <span class="ax-g">x <input type="number" step="any" value="${a.xmin ?? ''}" placeholder="${auto(c.scales.x, 'min')}" onchange="setAxis('${key}','xmin',this.value)">
+       <input type="number" step="any" value="${a.xmax ?? ''}" placeholder="${auto(c.scales.x, 'max')}" onchange="setAxis('${key}','xmax',this.value)"></span>
+     <span class="ax-g">y <input type="number" step="any" value="${a.ymin ?? ''}" placeholder="${auto(c.scales.y, 'min')}" onchange="setAxis('${key}','ymin',this.value)">
+       <input type="number" step="any" value="${a.ymax ?? ''}" placeholder="${auto(c.scales.y, 'max')}" onchange="setAxis('${key}','ymax',this.value)"></span>
+     <button class="iso-mini" onclick="resetAxis('${key}')">${manual ? '⟲ auto' : 'auto'}</button>`;
+}
+function baseOpts(xl, yl) {
+  return {
+    responsive: true, animation: { duration: 300 }, interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { position: 'top', labels: { boxWidth: 11, padding: 12 } } },
+    scales: {
+      x: { type: 'linear', title: { display: true, text: xl }, grid: { color: GRID } },
+      y: { title: { display: true, text: yl }, grid: { color: GRID } }
+    }
+  };
+}
+
+function makeLine(scans, betas) {
+  return (yKey) => scans.map((s, i) => {
+    const step = Math.max(1, Math.floor(s.T.length / 400));
+    const data = [];
+    for (let j = 0; j < s.T.length; j += step) data.push({ x: s.T[j], y: s[yKey][j] });
+    return { label: `β=${betas[i]}`, borderColor: scanColor(s), borderWidth: 1.6, pointRadius: 0, tension: 0.25, data };
+  });
+}
+
+function renderDSC(scans, betas) {
+  dc('dsc');
+  mkChart('dsc', 'dscChart', {
+    type: 'line', data: { datasets: makeLine(scans, betas)('hf') },
+    options: baseOpts('Temperature (°C)', 'Heat flow (mW)')
+  }, 'DSC thermograms vs T');
+}
+
+function renderAlpha(scans, betas) {
+  dc('alp');
+  const o = baseOpts('Temperature (°C)', 'Conversion α (—)'); o.scales.y.min = 0; o.scales.y.max = 1;
+  mkChart('alp', 'alphaChart', {
+    type: 'line', data: { datasets: makeLine(scans, betas)('alpha') }, options: o
+  }, 'Conversion α vs T');
+}
+
+function renderEa(results) {
+  dc('ea');
+  mkChart('ea', 'eaChart', {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'upper', data: results.map(r => ({ x: r.alpha * 100, y: r.Ea_vyaz + r.sigma })), borderColor: 'transparent', backgroundColor: 'rgba(13,138,112,0.12)', fill: '+1', pointRadius: 0, tension: 0.3 },
+        { label: 'Eα Vyazovkin', data: results.map(r => ({ x: r.alpha * 100, y: r.Ea_vyaz })), borderColor: '#0d8a70', borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#0d8a70', tension: 0.3 },
+        { label: 'lower', data: results.map(r => ({ x: r.alpha * 100, y: r.Ea_vyaz - r.sigma })), borderColor: 'transparent', backgroundColor: 'rgba(13,138,112,0.12)', fill: '-1', pointRadius: 0, tension: 0.3 },
+        // legend-only entry naming the band; no data, just a swatch
+        { label: 'shaded = ± σ (standard deviation)', data: [], backgroundColor: 'rgba(13,138,112,0.28)', borderColor: 'rgba(13,138,112,0.28)', fill: true, pointRadius: 0 }
+      ]
+    },
+    options: {
+      responsive: true, animation: { duration: 400 }, interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { filter: i => i.text === 'Eα Vyazovkin' || i.text.startsWith('shaded'), boxWidth: 11, usePointStyle: false } },
+        tooltip: { callbacks: { label: c => c.datasetIndex === 1 ? `Eα = ${c.parsed.y.toFixed(1)} kJ mol⁻¹` : '' } }
+      },
+      scales: {
+        x: { type: 'linear', min: 0, max: 100, title: { display: true, text: 'Conversion (%)' }, grid: { color: GRID } },
+        y: { title: { display: true, text: 'Eα (kJ mol⁻¹)' }, grid: { color: GRID } }
+      }
+    }
+  }, 'Activation Energy vs conversion');
+}
+
+// Report panel 1 — DSC heat flow vs time, the METTLER "^exo" plot
+// index range (in the scan arrays) of the integrated peak, from the manual/auto limits in °C
+function peakIndexRange(s) {
+  const unit = s.intUnit || 'C';
+  const auto = s.intAuto || { from: s.T[0], to: s.T[s.T.length - 1] };
+  let i0 = limitToIndex(s.T, s.t, s.intFrom, unit);
+  let i1 = limitToIndex(s.T, s.t, s.intTo, unit);
+  if (i0 == null) i0 = nearestIndex(s.T, auto.from);
+  if (i1 == null) i1 = nearestIndex(s.T, auto.to);
+  if (i1 < i0) { const k = i0; i0 = i1; i1 = k; }
+  return { i0, i1 };
+}
+
+// x axis of the first report panel: 'time' (min) or 'temp' (°C)
+let dsctAxis = 'time';
+function setDsctAxis(mode) {
+  dsctAxis = mode === 'temp' ? 'temp' : 'time';
+  const a = document.getElementById('dsctAxisTime'), b = document.getElementById('dsctAxisTemp');
+  if (a) a.classList.toggle('active', dsctAxis === 'time');
+  if (b) b.classList.toggle('active', dsctAxis === 'temp');
+  delete axisState.dsct;                       // the manual range belongs to the other axis
+  if (lastScans && lastScans.length) renderDSCtime(lastScans, lastBetas);
+}
+
+function renderDSCtime(scans, betas) {
+  dc('dsct');
+  const t0 = s => s.t[0];
+  const xOf = (s, j) => dsctAxis === 'temp' ? s.T[j] : (s.t[j] - t0(s)) / 60;
+  const datasets = [];
+  let tLo = Infinity, tHi = -Infinity;
+
+  scans.forEach((s, i) => {
+    const col = scanColor(s);
+    const step = Math.max(1, Math.floor(s.T.length / 400));
+    const { i0, i1 } = s.hfSource ? peakIndexRange(s) : { i0: 0, i1: s.T.length - 1 };
+    tLo = Math.min(tLo, xOf(s, i0));
+    tHi = Math.max(tHi, xOf(s, i1));
+
+    // full trace (thin), only useful as context inside the chosen range
+    const trace = [];
+    for (let j = 0; j < s.T.length; j += step) trace.push({ x: xOf(s, j), y: s.hf[j] });
+
+    // integrated peak filled down to the linear onset→endset baseline
+    const yb0 = s.hf[i0], yb1 = s.hf[i1], tb0 = s.t[i0], tb1 = s.t[i1];
+    const baseAt = t => yb0 + (yb1 - yb0) * (t - tb0) / ((tb1 - tb0) || 1);
+    const baseline = [], peak = [];
+    for (let j = i0; j <= i1; j += Math.max(1, Math.floor((i1 - i0) / 260))) {
+      const x = xOf(s, j);
+      baseline.push({ x, y: baseAt(s.t[j]) });
+      peak.push({ x, y: s.hf[j] });
+    }
+    // baseline first (hidden), then the peak filling down to it (fill:'-1')
+    datasets.push({ label: `_base${i}`, data: baseline, borderColor: 'transparent', pointRadius: 0, fill: false, tension: 0 });
+    datasets.push({
+      label: `β=${betas[i]} K min⁻¹`, data: peak,
+      borderColor: col, borderWidth: 1.6, pointRadius: 0, tension: 0.25,
+      fill: '-1', backgroundColor: hexA(col, 0.28)            // translucent → peaks underneath stay visible
+    });
+    datasets.push({ label: `_trace${i}`, data: trace, borderColor: hexA(col, 0.45), borderWidth: 0.8, borderDash: [2, 2], pointRadius: 0, tension: 0.25, fill: false });
+  });
+
+  const o = baseOpts(dsctAxis === 'temp' ? 'Temperature (°C)' : 'Time (min)', 'Heat flow (mW)');
+  o.plugins.legend.labels.boxWidth = 9;
+  o.plugins.legend.labels.font = { size: 9 };
+  o.plugins.legend.labels.filter = it => !it.text.startsWith('_');    // hide baseline/trace helpers
+  // show only the chosen integration range (auto or manual)
+  if (isFinite(tLo) && isFinite(tHi) && tHi > tLo) {
+    const pad = (tHi - tLo) * 0.06;
+    o.scales.x.min = tLo - pad; o.scales.x.max = tHi + pad;
+  }
+  mkChart('dsct', 'dscTimeChart', { type: 'line', data: { datasets } , options: o },
+    dsctAxis === 'temp' ? 'DSC thermograms vs temperature' : 'DSC thermograms vs time');
+}
+
+// hex "#rrggbb" → "rgba(r,g,b,a)"
+function hexA(hex, a) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  return `rgba(${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)},${a})`;
+}
+
+// Report panel 2 — conversion (%) vs temperature
+function renderConv(scans, betas) {
+  dc('conv');
+  const ds = scans.map((s, i) => {
+    const step = Math.max(1, Math.floor(s.T.length / 400));
+    const data = [];
+    for (let j = 0; j < s.T.length; j += step) data.push({ x: s.T[j], y: s.alpha[j] * 100 });
+    return { label: `β=${betas[i]}`, borderColor: scanColor(s), borderWidth: 1.3, pointRadius: 0, tension: 0.25, data };
+  });
+  const o = baseOpts('Temperature (°C)', 'Conversion (%)');
+  o.scales.y.min = 0; o.scales.y.max = 100;
+  o.plugins.legend.labels.boxWidth = 9;
+  o.plugins.legend.labels.font = { size: 9 };
+  mkChart('conv', 'convChart', { type: 'line', data: { datasets: ds }, options: o }, 'Conversion % vs T');
+}
+
+// α selection for the Iso-Conversion panel
+const aKey = a => a.toFixed(2);
+function defaultIsoSelection(iso) {
+  const dec = iso.series.filter(s => Math.abs(s.alpha * 10 - Math.round(s.alpha * 10)) < 1e-6);
+  return new Set((dec.length >= 3 ? dec : iso.series).map(s => aKey(s.alpha)));
+}
+function isoUse(iso) {
+  if (!isoSelected) isoSelected = defaultIsoSelection(iso);
+  const use = iso.series.filter(s => isoSelected.has(aKey(s.alpha)));
+  return use;
+}
+function renderIsoPicker(iso) {
+  const box = document.getElementById('isoPick');
+  if (!isoSelected) isoSelected = defaultIsoSelection(iso);
+  box.innerHTML = iso.series.map(s => {
+    const k = aKey(s.alpha), on = isoSelected.has(k);
+    const col = isoColor(s.alpha);
+    return `<span class="iso-chip${on ? ' on' : ''}" style="${on ? `color:${col};` : ''}"
+      onclick="toggleIso('${k}')" title="Eα = ${s.Ea.toFixed(1)} kJ mol⁻¹">α ${k}</span>`;
+  }).join('');
+}
+function toggleIso(k) {
+  if (!lastIso) return;
+  if (isoSelected.has(k)) isoSelected.delete(k); else isoSelected.add(k);
+  renderIsoPicker(lastIso); renderIso(lastIso);
+}
+function isoSelectAll(on) {
+  if (!lastIso) return;
+  isoSelected = on ? new Set(lastIso.series.map(s => aKey(s.alpha))) : new Set();
+  renderIsoPicker(lastIso); renderIso(lastIso);
+}
+function isoSelectDecades() {
+  if (!lastIso) return;
+  isoSelected = defaultIsoSelection(lastIso);
+  renderIsoPicker(lastIso); renderIso(lastIso);
+}
+// colour ramps with α (blue = early conversion → red = full cure)
+function isoColor(a) { return `hsl(${Math.round(220 - 220 * a)} 70% 42%)`; }
+
+// isothermal cure time vs temperature, one curve per selected α
+function renderIso(iso) {
+  dc('iso');
+  const use = isoUse(iso);
+  mkChart('iso', 'isoChart', {
+    type: 'line',
+    data: {
+      datasets: use.map(s => ({
+        label: `α(${Math.round(s.alpha * 100)} %)`,
+        // seconds, as in the STARe report
+        data: s.times.map((v, k) => v == null ? null : { x: iso.temps[k], y: v * 60 }),
+        borderColor: isoColor(s.alpha),
+        backgroundColor: isoColor(s.alpha),
+        borderWidth: 1.8, pointRadius: 0, tension: 0.25, spanGaps: true
+      }))
+    },
+    options: {
+      responsive: true, animation: { duration: 300 }, interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 8, padding: 6, font: { size: 9 } } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtTime(c.parsed.y / 60)}` } }
+      },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Isothermal temperature (°C)' }, grid: { color: GRID } },
+        y: {
+          type: 'logarithmic', title: { display: true, text: 'time to reach α (s)' },
+          grid: { color: GRID },
+          ticks: { callback: v => { const l = Math.log10(v); return Math.abs(l - Math.round(l)) < 1e-6 ? fmtTime(v / 60) : ''; } }
+        }
+      }
+    }
+  }, 'Applied Kinetics: Iso-Conversion');
+}
+
+function fmtTime(min) {
+  if (min == null || !isFinite(min)) return '—';
+  if (min < 1) return `${(min * 60).toFixed(1)} s`;
+  if (min < 120) return `${min.toFixed(1)} min`;
+  if (min < 2880) return `${(min / 60).toFixed(1)} h`;
+  return `${(min / 1440).toFixed(1)} d`;
+}
+
+// ══════════════════════════════════════════════
+// REPORT (layout METTLER STARe — Model Free Kinetics)
+// ══════════════════════════════════════════════
+function trapz(y, x) {
+  let s = 0;
+  for (let i = 1; i < y.length; i++) s += 0.5 * ((y[i] || 0) + (y[i - 1] || 0)) * (x[i] - x[i - 1]);
+  return s;
+}
+
+// integral (mJ) and peak temperature of each scan, for the report annotations
+function scanStats(s) {
+  const area = s.meta && s.meta.area != null ? s.meta.area : trapz(s.hf, s.t);
+  let Tpeak = s.meta && s.meta.Tpeak != null ? s.meta.Tpeak : null;
+  if (Tpeak == null) {
+    let pk = 0;
+    for (let i = 1; i < s.hf.length; i++) if (s.hf[i] > s.hf[pk]) pk = i;
+    Tpeak = s.T[pk];
+  }
+  return { area, Tpeak, norm: s.mass > 0 ? area / s.mass : null };
+}
+
+function renderReport(scans, betas, results) {
+  const names = scans.map(s => s.name.replace(/\.[a-z0-9]+$/i, ''));
+  document.getElementById('reportTitle').textContent = commonPrefix(names) || (currentMode === 'file' ? 'MFK analysis' : 'DGEBA/IPDA simulation');
+  document.getElementById('reportDate').textContent = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  document.getElementById('reportFootL').textContent =
+    `Vyazovkin AIC — Model Free Kinetics · ${currentMode === 'file' ? 'experimental data' : 'simulation'} · ${betas.length} ramps`;
+  document.getElementById('reportFootR').textContent = `Vyazovkin Method v${APP_VERSION}`;
+
+  // panel 1 side notes: integral / normalized / peak, one block per scan
+  document.getElementById('dscNotes').innerHTML =
+    '<div>' + scans.map((s, i) => {
+      const st = scanStats(s);
+      return `<div class="rp-note" style="color:${scanColor(s)};margin-bottom:7px">
+        <b>β = ${betas[i]} K min⁻¹</b>${s.mass > 0 ? ` · ${s.mass} mg` : ''}<br>
+        ${esc(s.name).slice(0, 34)}<br>
+        Integral&nbsp;&nbsp;&nbsp;&nbsp;${st.area.toFixed(2)} mJ<br>
+        normalized&nbsp;&nbsp;${st.norm != null ? st.norm.toFixed(2) + ' J g⁻¹' : '— (enter mass)'}<br>
+        Peak&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${st.Tpeak.toFixed(2)} °C
+      </div>`;
+    }).join('') + '</div>';
+
+  // panel 2 side tables: temperature at each conversion level, one column per scan
+  const levels = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  renderIntEditor(scans, betas);
+
+  document.getElementById('convNotes').innerHTML = scans.map((s, i) => {
+    const rows = levels.map(p => {
+      const idx = s.alpha.findIndex(v => v >= p / 100);
+      const T = idx < 0 ? null : s.T[idx];
+      return `<tr><td>${T == null ? '—' : T.toFixed(2)}</td><td>${p.toFixed(2)}</td></tr>`;
+    }).join('');
+    return `<table style="color:${scanColor(s)}">
+      <thead><tr><th colspan="2">Conversion β=${betas[i]}</th></tr><tr><th>°C</th><th>%</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  }).join('');
+}
+
+// Integration-limits editor: blank input = automatic onset/endset.
+function renderIntEditor(scans, betas) {
+  const box = document.getElementById('intEditor');
+  const editable = scans.filter(s => s.hfSource && s.srcIndex != null);
+  if (!editable.length) {
+    box.innerHTML = currentMode === 'file'
+      ? '<span>Integration limits: not applicable (α read from a column).</span>'
+      : '<span>Integration limits: available in Real Files mode.</span>';
+    return;
+  }
+  box.innerHTML =
+    `<div class="int-head"><b>Peak integration</b>
+       <span>limits in °C or min — blank = automatic</span>
+       <button class="iso-mini" onclick="resetIntAll()">all automatic</button></div>` +
+    scans.map((s, i) => {
+      if (!s.hfSource || s.srcIndex == null) return '';
+      const man = s.intFrom != null || s.intTo != null;
+      const unit = s.intUnit || 'C';
+      const a = s.intAuto || { from: NaN, to: NaN, fromMin: NaN, toMin: NaN };
+      // placeholders and the auto read-out follow the unit currently selected
+      const ph0 = unit === 'min' ? (a.fromMin ?? NaN) : a.from;
+      const ph1 = unit === 'min' ? (a.toMin ?? NaN) : a.to;
+      const u = unit === 'min' ? 'min' : '°C';
+      const f = v => isFinite(v) ? v.toFixed(unit === 'min' ? 1 : 0) : '—';
+      return `<div class="int-row">
+        <span class="int-b" style="color:${scanColor(s)}">β=${betas[i]}</span>
+        from <input type="number" step="${unit === 'min' ? '0.1' : '1'}" value="${s.intFrom ?? ''}" placeholder="${f(ph0)}"
+             onchange="setIntLimit(${s.srcIndex}, 'from', this.value)">
+        to <input type="number" step="${unit === 'min' ? '0.1' : '1'}" value="${s.intTo ?? ''}" placeholder="${f(ph1)}"
+             onchange="setIntLimit(${s.srcIndex}, 'to', this.value)">
+        <select class="int-unit" onchange="setIntUnit(${s.srcIndex}, this.value)" title="Unit of the integration limits">
+          <option value="C"${unit === 'C' ? ' selected' : ''}>°C</option>
+          <option value="min"${unit === 'min' ? ' selected' : ''}>min</option>
+        </select>
+        <span class="${man ? 'int-man' : 'int-auto'}">${man ? 'manual' : 'auto'} ${f(ph0)}–${f(ph1)} ${u}
+          · ${s.meta.area != null ? s.meta.area.toFixed(1) + ' mJ' : '—'}</span>
+        ${man ? `<button class="iso-mini" onclick="resetInt(${s.srcIndex})">auto</button>` : ''}
+      </div>`;
+    }).join('');
+}
+
+// switching unit converts the limits already entered, so the peak does not move
+function setIntUnit(i, unit) {
+  const s = uploadedScans[i]; if (!s) return;
+  const from = unit === 'min' ? 'C' : 'min';
+  if (unit !== (s.intUnit || 'C')) {
+    const conv = v => {
+      const idx = limitToIndex(s.T, s.t, v, from);
+      if (idx == null) return null;
+      return unit === 'min' ? +((s.t[idx] - s.t[0]) / 60).toFixed(2) : +s.T[idx].toFixed(1);
+    };
+    s.intFrom = conv(s.intFrom);
+    s.intTo = conv(s.intTo);
+  }
+  s.intUnit = unit === 'min' ? 'min' : 'C';
+  markDirty();
+  runAll();
+}
+
+function setIntLimit(i, which, val) {
+  const s = uploadedScans[i]; if (!s) return;
+  const v = val === '' || val == null ? null : +val;
+  s[which === 'from' ? 'intFrom' : 'intTo'] = (v == null || isNaN(v)) ? null : v;
+  markDirty();
+  runAll();
+}
+function resetInt(i) {
+  const s = uploadedScans[i]; if (!s) return;
+  s.intFrom = s.intTo = null;
+  markDirty();
+  runAll();
+}
+function resetIntAll() {
+  uploadedScans.forEach(s => { s.intFrom = s.intTo = null; });
+  markDirty();
+  runAll();
+}
+
+function commonPrefix(arr) {
+  if (!arr.length) return '';
+  const low = arr.map(s => s.toLowerCase());
+  let p = arr[0];
+  low.forEach(s => { while (p && !s.startsWith(p.toLowerCase())) p = p.slice(0, -1); });
+  // do not cut a word in half
+  if (p.length < arr[0].length && !/\s$/.test(p)) p = p.replace(/\S*$/, '');
+  return p.trim().replace(/[-_(,]+$/, '').trim();
+}
+
+function renderCompare(results) {
+  dc('cmp');
+  mkChart('cmp', 'compareChart', {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'Vyazovkin (AIC)', data: results.map(r => ({ x: r.alpha, y: r.Ea_vyaz })), borderColor: '#0d8a70', borderWidth: 2, pointRadius: 2, tension: 0.3 },
+        { label: 'KAS (linear)', data: results.map(r => r.Ea_kas == null ? null : { x: r.alpha, y: r.Ea_kas }).filter(Boolean), borderColor: '#cf4b18', borderWidth: 1.5, borderDash: [4, 3], pointRadius: 2, tension: 0.3 }
+      ]
+    },
+    options: baseOpts('α', 'Eα (kJ mol⁻¹)')
+  }, 'Vyazovkin vs KAS');
+}
+
+function renderPhi(scans, results, dA) {
+  dc('phi');
+  const aR = 0.50, aL = Math.max(0.0005, aR - dA);
+  const grids = scans.map(s => alphaGrid(s, aL, aR));
+  const pts = [];
+  if (!grids.some(g => !g)) {
+    for (let E = 5; E <= 300; E += 2) pts.push({ x: E, y: PhiGrids(E, grids) });
+  }
+  mkChart('phi', 'phiChart', {
+    type: 'line',
+    data: { datasets: [{ label: 'Φ(Eα) @ α=0.50', data: pts, borderColor: '#3457d5', borderWidth: 2, pointRadius: 0, tension: 0.2, fill: { target: 'origin', above: 'rgba(52,87,213,0.06)' } }] },
+    options: {
+      responsive: true, animation: { duration: 300 }, plugins: { legend: { display: false } },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Eα (kJ mol⁻¹)' }, grid: { color: GRID } },
+        y: { title: { display: true, text: 'Φ(Eα)' }, grid: { color: GRID } }
+      }
+    }
+  }, 'Φ(Eα) function at α=0.50');
+}
+
+// ══════════════════════════════════════════════
+// TABLES
+// ══════════════════════════════════════════════
+function renderTable(results, betas) {
+  document.getElementById('resultsHead').innerHTML =
+    '<th>α</th>' + betas.map((b, i) => `<th>T<sub>α</sub> β=${b}</th>`).join('')
+    + '<th>Eα Vyaz.</th><th>±σ</th><th>Eα KAS</th><th>Phase</th>';
+  const tb = document.getElementById('resultsTbody');
+  tb.innerHTML = '';
+  results.forEach(r => {
+    const row = document.createElement('tr');
+    row.innerHTML =
+      `<td class="td-n" style="font-weight:600">${r.alpha.toFixed(2)}</td>`
+      + betas.map((_, i) => `<td class="td-n">${r.T_alpha[i] !== null ? r.T_alpha[i] + ' °C' : '—'}</td>`).join('')
+      + `<td class="td-ea">${r.Ea_vyaz}${r.unbounded ? ' <span title="Φ has no internal minimum: unreliable value" style="color:var(--accent2)">⚠</span>' : ''}</td>`
+      + `<td style="color:var(--muted)">±${r.sigma}</td>`
+      + `<td class="td-kas">${r.Ea_kas ?? '—'}</td>`
+      + `<td style="color:${r.phase.color};font-size:10px">${r.phase.label}</td>`;
+    tb.appendChild(row);
+  });
+}
+
+function renderIsoTable(iso) {
+  const stepT = Math.max(1, Math.round(iso.temps.length / 8));
+  const cols = iso.temps.filter((_, i) => i % stepT === 0);
+  document.getElementById('isoHead').innerHTML =
+    '<th>α</th><th>Eα</th>' + cols.map(T => `<th>${T} °C</th>`).join('');
+  const tb = document.getElementById('isoTbody');
+  tb.innerHTML = '';
+  iso.series.forEach(s => {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td class="td-n" style="font-weight:600">${s.alpha.toFixed(2)}</td>`
+      + `<td class="td-ea">${s.Ea.toFixed(1)}</td>`
+      + cols.map(T => {
+          const idx = iso.temps.indexOf(T);
+          return `<td class="td-n">${fmtTime(s.times[idx])}</td>`;
+        }).join('');
+    tb.appendChild(row);
+  });
+}
+
+// ══════════════════════════════════════════════
+// DOWNLOAD
+// ══════════════════════════════════════════════
+function buildCSV(sep) {
+  if (!lastResults) return '';
+  const hdr = ['alpha', ...lastBetas.map((b, i) => `T_alpha_beta${i + 1}_${b}Kmin_degC`),
+    'Ea_Vyazovkin_kJmol', 'sigma_kJmol', 'Ea_KAS_kJmol', 'Phase'].join(sep);
+  const rows = lastResults.map(r =>
+    [r.alpha.toFixed(4), ...lastBetas.map((_, i) => r.T_alpha[i] !== null ? r.T_alpha[i] : ''),
+      r.Ea_vyaz, r.sigma, r.Ea_kas ?? '', r.phase.label].join(sep));
+  return [hdr, ...rows].join('\n');
+}
+
+function buildIsoCSV(sep) {
+  if (!lastIso) return '';
+  const hdr = ['alpha', 'Ea_kJmol', ...lastIso.temps.map(T => `t_min_at_${T}C`)].join(sep);
+  const rows = lastIso.series.map(s =>
+    [s.alpha.toFixed(4), s.Ea.toFixed(2), ...s.times.map(v => v == null ? '' : v.toFixed(3))].join(sep));
+  return [hdr, ...rows].join('\n');
+}
+
+function saveText(content, name, mime) {
+  const blob = new Blob(['﻿' + content], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function downloadTable(fmt) {
+  if (!lastResults) { alert('Run the calculation first.'); return; }
+  if (fmt === 'clipboard') {
+    navigator.clipboard.writeText(buildCSV('\t')).then(() => {
+      const b = document.querySelector('.dl-btn.clip');
+      const orig = b.innerHTML; b.innerHTML = '✓ Copied!'; b.style.color = 'var(--accent)';
+      setTimeout(() => { b.innerHTML = orig; b.style.color = ''; }, 1600);
+    });
+    return;
+  }
+  const sep = fmt === 'csv' ? ',' : '\t';
+  saveText(buildCSV(sep), 'vyazovkin_results_v' + APP_VERSION + (fmt === 'csv' ? '.csv' : '.tsv'),
+    fmt === 'csv' ? 'text/csv' : 'text/tab-separated-values');
+}
+
+// desired export resolution multiplier (1× screen … 4× print), set from the toolbar
+let exportScale = 2;
+
+// render a chart to a PNG at exportScale× its on-screen size, for print-quality output
+function chartPNG(key) {
+  const c = charts[key];
+  if (!c) return null;
+  const scale = Math.max(1, Math.min(4, exportScale || 1));
+  if (scale === 1) {
+    try { return c.toBase64Image('image/png', 1); } catch (e) { return null; }
+  }
+  const src = c.canvas;
+  const w = (src && src.clientWidth) || 600, h = (src && src.clientHeight) || 320;
+  const off = document.createElement('canvas');
+  off.width = Math.round(w * scale); off.height = Math.round(h * scale);
+  off.style.width = w + 'px'; off.style.height = h + 'px';
+  document.body.appendChild(off);
+  let png = null, tmp = null;
+  try {
+    const cfg = c.config;
+    tmp = new Chart(off, {
+      type: cfg.type,
+      data: cfg.data,
+      options: Object.assign({}, cfg.options, { responsive: false, animation: false, devicePixelRatio: scale })
+    });
+    png = tmp.toBase64Image('image/png', 1);
+  } catch (e) {
+    try { png = c.toBase64Image('image/png', 1); } catch (e2) { png = null; }
+  } finally {
+    if (tmp) tmp.destroy();
+    if (off.parentNode) off.parentNode.removeChild(off);
+  }
+  return png;
+}
+
+function exportFullReport() {
+  if (!lastResults) { alert('Run the calculation first.'); return; }
+  // the four MFK panels go on page 1; the rest follows, in panel order
+  const mainKeys = ['dsct', 'conv', 'ea', 'iso'];
+  const restKeys = ['dsc', 'alp', 'cmp', 'phi'];
+  const fig = k => ({ k, label: (chartMeta[k] || {}).label || k, png: chartPNG(k) });
+  const figsMain = mainKeys.map(fig).filter(f => f.png);
+  const figsRest = restKeys.map(fig).filter(f => f.png);
+
+  const html = document.getElementById('resultsTbody').closest('table').outerHTML;
+  const isoTbl = document.getElementById('isoTbody').closest('table').outerHTML;
+  const notes = document.getElementById('dscNotes').innerHTML;
+  const conv = document.getElementById('convNotes').innerHTML;
+  const status = document.getElementById('statusBar').textContent.replace(/\s+/g, ' ').trim();
+  const title = document.getElementById('reportTitle').textContent;
+  const when = new Date().toLocaleString('en-GB');
+
+  const limits = lastScans.filter(s => s.hfSource).map((s, i) =>
+    `<tr><td>β = ${lastBetas[i]} K min⁻¹</td><td>${s.name}</td>
+      <td>${(s.intFrom != null || s.intTo != null) ? 'manual' : 'automatic'}</td>
+      <td>${s.intAuto ? s.intAuto.from.toFixed(1) + ' → ' + s.intAuto.to.toFixed(1) + ' °C' : '—'}</td>
+      <td>${s.meta.area != null ? s.meta.area.toFixed(2) + ' mJ' : '—'}</td>
+      <td>${s.mass > 0 ? (s.meta.area / s.mass).toFixed(2) + ' J g⁻¹' : '—'}</td>
+      <td>${s.meta.Tpeak != null ? s.meta.Tpeak.toFixed(2) + ' °C' : '—'}</td></tr>`).join('');
+
+  const doc = `<!DOCTYPE html>
+<html lang="it"><head><meta charset="UTF-8">
+<title>Report Vyazovkin — ${esc(title)}</title>
+<style>
+ body{font-family:'Inter',system-ui,sans-serif;color:#1b2530;background:#fff;margin:0;padding:28px 32px;font-size:13px;line-height:1.6}
+ h1{font-size:17px;margin-bottom:2px}h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#6b7684;margin:26px 0 10px;border-bottom:1px solid #dde3ea;padding-bottom:5px}
+ .meta{font-family:ui-monospace,monospace;font-size:11px;color:#6b7684;margin-bottom:6px}
+ .figs{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+ figure{margin:0;border:1px solid #dde3ea;border-radius:4px;padding:10px;page-break-inside:avoid}
+ figcaption{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#6b7684;margin-bottom:6px}
+ img{width:100%;height:auto;display:block}
+ /* page 1: the four MFK panels, 2×2, filling one landscape page */
+ .page1{page-break-after:always}
+ .page1 .figs{grid-template-rows:1fr 1fr}
+ .page-title{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #dde3ea;padding-bottom:6px;margin-bottom:12px}
+ .page-title .pt-date{font-family:ui-monospace,monospace;font-size:11px;color:#6b7684}
+ @media print{
+   .page1{height:calc(100vh - 40px);display:flex;flex-direction:column}
+   .page1 .figs{flex:1;min-height:0}
+   .page1 figure{display:flex;flex-direction:column;min-height:0}
+   .page1 figure img{flex:1;min-height:0;object-fit:contain}
+ }
+ table{width:100%;border-collapse:collapse;font-family:ui-monospace,monospace;font-size:11px}
+ th{text-align:left;padding:6px 9px;border-bottom:1px solid #dde3ea;color:#6b7684;font-size:10px;text-transform:uppercase;font-weight:500;white-space:nowrap}
+ td{padding:5px 9px;border-bottom:1px solid #eef1f5;white-space:nowrap}
+ .side{display:flex;flex-wrap:wrap;gap:18px;font-family:ui-monospace,monospace;font-size:10px;line-height:1.6}
+ .side table{width:auto}.side th{border:none;padding:0 6px 2px 0}.side td{border:none;padding:0 6px 0 0}
+ .scroll{overflow-x:auto}
+ details{margin-top:8px}pre{font-family:ui-monospace,monospace;font-size:10px;background:#f4f6f8;border:1px solid #dde3ea;border-radius:4px;padding:10px;overflow-x:auto}
+ footer{margin-top:28px;border-top:1px solid #dde3ea;padding-top:10px;font-size:11px;color:#6b7684}
+ /* date + page number in the top-right of every printed page; nothing in the footer area */
+ @page{size:A4 landscape;margin:14mm 10mm 10mm 10mm;
+   @top-right{content:"${esc(when)} · page " counter(page) " / " counter(pages);font-family:ui-monospace,monospace;font-size:9px;color:#6b7684}
+   @bottom-center{content:""} @bottom-right{content:""} @bottom-left{content:""}}
+</style></head><body>
+
+<!-- PAGE 1 — the four MFK panels -->
+<section class="page1">
+  <div class="page-title"><h1 style="margin:0">${esc(title)}</h1><span class="pt-date">${esc(when)}</span></div>
+  <div class="figs">${figsMain.map(f => `<figure><figcaption>${esc(f.label)}</figcaption><img src="${f.png}" alt="${esc(f.label)}"></figure>`).join('')}</div>
+</section>
+
+<div class="meta">Vyazovkin Advanced Isoconversional Method · v${APP_VERSION}</div>
+<div class="meta">${esc(status)}</div>
+
+<h2>Additional charts</h2>
+<div class="figs">${figsRest.map(f => `<figure><figcaption>${esc(f.label)}</figcaption><img src="${f.png}" alt="${esc(f.label)}"></figure>`).join('')}</div>
+
+<h2>Scans — peak integration</h2>
+<div class="scroll"><table>
+<thead><tr><th>Ramp</th><th>File</th><th>Limits</th><th>Integrated range</th><th>Integral</th><th>Normalized</th><th>Peak</th></tr></thead>
+<tbody>${limits || '<tr><td colspan="7">—</td></tr>'}</tbody></table></div>
+
+<h2>Thermogram annotations</h2>
+<div class="side">${notes}</div>
+
+<h2>Conversion per scan</h2>
+<div class="side">${conv}</div>
+
+<h2>E<sub>α</sub>(α) table — Vyazovkin</h2>
+<div class="scroll">${html}</div>
+
+<h2>Isothermal cure time</h2>
+<div class="scroll">${isoTbl}</div>
+
+<h2>Embedded raw data</h2>
+<details><summary>Results CSV</summary><pre>${esc(buildCSV(','))}</pre></details>
+<details><summary>Isothermal prediction CSV</summary><pre>${esc(buildIsoCSV(','))}</pre></details>
+
+<footer>
+ Vyazovkin Method v${APP_VERSION} — PolyForm Noncommercial License 1.0.0 — © 2025-2026 Flavio Pendolino<br>
+ Model-free method (Vyazovkin 2001 · ICTAC 2011). Validate the results before any analytical or engineering use.
+</footer>
+</body></html>`;
+
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  saveText(doc, `vyazovkin_report_${stamp}.html`, 'text/html');
+}
+
+function downloadIso() {
+  if (!lastIso) { alert('Run the calculation first.'); return; }
+  saveText(buildIsoCSV(','), 'vyazovkin_isothermal_prediction_v' + APP_VERSION + '.csv', 'text/csv');
+}
+
+// ⎙ Export PDF — print the on-screen MFK report; date + page number go top-right (CSS @page),
+// nothing in the footer. Chart canvases are re-rendered at the chosen resolution for a crisp print.
+function exportPDF() {
+  if (!lastResults) { alert('Run the calculation first.'); return; }
+  const when = new Date().toLocaleString('en-GB');
+  document.documentElement.style.setProperty('--print-hdr',
+    JSON.stringify(`${when} · Vyazovkin v${APP_VERSION}`));
+  const scale = Math.max(1, Math.min(4, exportScale || 1));
+  const saved = [];
+  Object.entries(charts).forEach(([k, c]) => {
+    saved.push([c, c.options.devicePixelRatio]);
+    try { c.options.devicePixelRatio = scale; c.resize(); } catch (e) {}
+  });
+  const restore = () => {
+    saved.forEach(([c, dpr]) => { try { c.options.devicePixelRatio = dpr; c.resize(); } catch (e) {} });
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  setTimeout(() => window.print(), 60);
+}
+
+// ══════════════════════════════════════════════
+// VIEWS  (report ▸ charts & tables)
+// ══════════════════════════════════════════════
+let currentView = 'report';
+function setView(v) {
+  currentView = v;
+  document.getElementById('viewReportBtn').classList.toggle('active', v === 'report');
+  document.getElementById('viewDataBtn').classList.toggle('active', v === 'data');
+  document.getElementById('viewManualBtn').classList.toggle('active', v === 'manual');
+  document.getElementById('report').style.display = v === 'report' ? '' : 'none';
+  document.getElementById('viewData').style.display = v === 'data' ? '' : 'none';
+  document.getElementById('viewManual').style.display = v === 'manual' ? '' : 'none';
+  if (v === 'manual') renderManual();
+  // charts sized while hidden come out wrong: force a resize when the view appears
+  Object.values(charts).forEach(c => { try { c.resize(); } catch (e) {} });
+}
+
+// ══════════════════════════════════════════════
+// MANUAL DSC  (inspect any trace, set the integration limits by hand)
+// ══════════════════════════════════════════════
+let manualView = { index: 0, xAxis: 'time', yMode: 'raw', zoom: false, scope: 'file' };
+
+// Whether the whole (raw) file can be plotted: needs the full temperature trace, plus either
+// a recorded heat flow or a conversion column to derive a heat-flow-like signal from.
+function canShowWholeFile(s) {
+  return !!(s.raw && s.raw.T && s.raw.T.length && (s.raw.hf || (s.raw.alpha && s.raw.alpha.length)));
+}
+
+// Heat-flow-like signal for the whole raw file: the recorded one if present, otherwise
+// derived from dα/dT (for files that only carry a conversion column).
+function rawHfOf(s) {
+  if (s.raw.hf) return s.raw.hf;
+  return derivedHF(s.raw.alpha.map(v => isNaN(v) ? 0 : v), s.raw.T);
+}
+
+// Datasets for a single trace, shared by the Manual view and the Peak picker.
+//   yMode 'raw'   → heat flow as recorded
+//   yMode 'sub'   → heat flow minus a global straight baseline (tiny peaks become visible)
+//   yMode 'deriv' → d(heat flow)/dx, useful to locate onset/endset of a shallow peak
+function traceDatasets(s, opt) {
+  const xAxis = opt.xAxis || 'temp', yMode = opt.yMode || 'raw';
+  // scope 'file' plots every step as recorded; 'segment' only the window under analysis
+  const whole = opt.scope === 'file' && canShowWholeFile(s);
+  const src = whole ? { T: s.raw.T, t: s.raw.t, hf: rawHfOf(s) } : s;
+  const off = whole ? (s.segFrom || 0) : 0;            // raw index of the analysed window
+  const n2 = src.T.length;
+  const xArr = xAxis === 'time' ? minutesAxis(src.t || src.T.map((_, i) => i * 60)) : src.T;
+  const sm = smooth(src.hf.map(v => isNaN(v) ? 0 : v), Math.max(1, Math.floor(n2 / 200)));
+
+  let y;
+  if (yMode === 'sub') {
+    const b0 = sm[0], b1 = sm[n2 - 1];
+    y = sm.map((v, i) => v - (b0 + (b1 - b0) * i / (n2 - 1)));
+  } else if (yMode === 'deriv') {
+    y = sm.map((v, i) => {
+      if (i === 0 || i === n2 - 1) return 0;
+      const dx = xArr[i + 1] - xArr[i - 1];
+      return dx ? (sm[i + 1] - sm[i - 1]) / dx : 0;
+    });
+  } else {
+    // must read from `src` (the array `n2`/`xArr` are built from), not from `s`: when
+    // scope is 'file', `src` is the full raw trace while `s` is only the analysed segment —
+    // using `s.hf` here misaligned the y-values and silently truncated the plotted trace
+    // to the segment's length.
+    y = src.hf.map(v => isNaN(v) ? 0 : v);
+  }
+
+  const step = Math.max(1, Math.floor(n2 / 900));
+  const trace = [];
+  for (let j = 0; j < n2; j += step) trace.push({ x: xArr[j], y: y[j] });
+  if (trace[trace.length - 1] && trace[trace.length - 1].x !== xArr[n2 - 1])
+    trace.push({ x: xArr[n2 - 1], y: y[n2 - 1] });
+
+  const col = scanColor(s);
+  // on a multi-step run the same temperature occurs several times, so the trace is drawn in
+  // acquisition order (showLine over an unsorted x axis) instead of being re-sorted
+  const ds = [{ label: s.name, data: trace, borderColor: whole ? hexA(col, 0.75) : col,
+    borderWidth: 1.4, pointRadius: 0, tension: 0.15, fill: false }];
+
+  if (whole) {
+    // highlight the step being analysed on top of the full trace
+    const seg = [];
+    for (let j = s.segFrom || 0; j <= (s.segTo || n2 - 1); j += Math.max(1, Math.floor(((s.segTo || 0) - (s.segFrom || 0)) / 500)))
+      seg.push({ x: xArr[j], y: y[j] });
+    ds.push({ label: '_seg', data: seg, borderColor: col, borderWidth: 2.2, pointRadius: 0, tension: 0.15, fill: false });
+  }
+
+  // shade the integrated window and mark its limits
+  const pr = peakIndexRange(s);
+  const i0 = pr.i0 + off, i1 = pr.i1 + off;
+  if (i1 > i0 && i1 < n2) {
+    const yb0 = y[i0], yb1 = y[i1];
+    const baseAt = i => yb0 + (yb1 - yb0) * (i - i0) / ((i1 - i0) || 1);
+    const base = [], peak = [];
+    const st2 = Math.max(1, Math.floor((i1 - i0) / 320));
+    for (let j = i0; j <= i1; j += st2) { base.push({ x: xArr[j], y: baseAt(j) }); peak.push({ x: xArr[j], y: y[j] }); }
+    if (base.length && base[base.length - 1].x !== xArr[i1]) { base.push({ x: xArr[i1], y: baseAt(i1) }); peak.push({ x: xArr[i1], y: y[i1] }); }
+    ds.push({ label: '_base', data: base, borderColor: hexA(col, 0.6), borderWidth: 1, borderDash: [3, 3], pointRadius: 0, fill: false });
+    ds.push({ label: '_peak', data: peak, borderColor: 'transparent', backgroundColor: hexA(col, 0.22), pointRadius: 0, fill: '-1' });
+    const ys = trace.map(p => p.y);
+    const lo = Math.min(...ys), hi = Math.max(...ys);
+    [[i0, 'from'], [i1, 'to']].forEach(([idx, lab]) => {
+      ds.push({ label: '_lim_' + lab, data: [{ x: xArr[idx], y: lo }, { x: xArr[idx], y: hi }],
+        borderColor: '#cf4b18', borderWidth: 1.2, borderDash: [4, 3], pointRadius: 0, fill: false });
+    });
+  }
+  return { ds, xArr, y };
+}
+
+function manualScan() { return uploadedScans[manualView.index] || uploadedScans[0]; }
+
+function renderManual() {
+  const wrap = document.getElementById('viewManual');
+  if (!wrap) return;
+  if (!uploadedScans.length) {
+    document.getElementById('manualMsg').textContent = 'No scan loaded — switch to Real Files mode and add DSC files.';
+    document.getElementById('manualTabs').innerHTML = '';
+    document.getElementById('manualTools').innerHTML = '';
+    document.getElementById('manualCtl').innerHTML = '';
+    document.getElementById('manualStats').innerHTML = '';
+    dc('manual');
+    return;
+  }
+  if (manualView.index >= uploadedScans.length) manualView.index = 0;
+  const s = manualScan();
+
+  const pending = uploadedScans.filter(x => x.peakOk === false).length;
+  document.getElementById('manualMsg').textContent = pending
+    ? `${pending} scan${pending > 1 ? 's' : ''} without an automatic peak — set the limits below`
+    : 'every scan has an integrated peak — adjust any limit here if the automatic one is off';
+
+  document.getElementById('manualTabs').innerHTML = uploadedScans.map((sc, i) => {
+    const cls = 'man-tab' + (i === manualView.index ? ' active' : '') + (sc.peakOk === false ? ' warn' : '');
+    return `<button class="${cls}" onclick="showManual(${i})" title="${esc(sc.name)}">
+      <span class="dot" style="background:${scanColor(sc)}"></span>${sc.peakOk === false ? '⚠ ' : ''}β=${sc.beta ?? '?'}</button>`;
+  }).join('');
+
+  const on = (k, v) => manualView[k] === v ? ' active' : '';
+  const wholeOk = canShowWholeFile(s);
+  document.getElementById('manualTools').innerHTML =
+    `<span class="grp">show
+      <button class="iso-mini${wholeOk ? on('scope', 'file') : ''}" onclick="setManual('scope','file')" ${wholeOk ? '' : 'disabled'}
+        title="${wholeOk ? 'Every step recorded in the file (heating, cooling, isothermal holds)'
+                         : 'No full trace stored for this scan (e.g. loaded from an older session) — reload the file to enable this view'}">whole file${wholeOk ? '' : ' ⚠'}</button>
+      <button class="iso-mini${wholeOk ? on('scope', 'segment') : ' active'}" onclick="setManual('scope','segment')"
+        title="Only the segment currently feeding the analysis">analysis segment</button></span>
+     <span class="grp">x
+      <button class="iso-mini${on('xAxis', 'temp')}" onclick="setManual('xAxis','temp')">temperature</button>
+      <button class="iso-mini${on('xAxis', 'time')}" onclick="setManual('xAxis','time')">time</button></span>
+     <span class="grp">y
+      <button class="iso-mini${on('yMode', 'raw')}" onclick="setManual('yMode','raw')">raw</button>
+      <button class="iso-mini${on('yMode', 'sub')}" onclick="setManual('yMode','sub')" title="Heat flow minus a straight baseline — reveals very shallow peaks">baseline-subtracted</button>
+      <button class="iso-mini${on('yMode', 'deriv')}" onclick="setManual('yMode','deriv')" title="Derivative — the peak sits where it crosses zero">derivative</button></span>
+     <span class="grp">
+      <button class="iso-mini${manualView.zoom ? ' active' : ''}" onclick="setManual('zoom', ${!manualView.zoom})" title="Zoom on the integration window, or show the whole trace">${manualView.zoom ? 'zoom on window' : 'whole trace'}</button></span>`;
+
+  const unit = s.intUnit || 'C';
+  const a = s.intAuto || {};
+  const ph = k => {
+    const v = unit === 'min' ? (k === 'from' ? a.fromMin : a.toMin) : (k === 'from' ? a.from : a.to);
+    return isFinite(v) ? v.toFixed(unit === 'min' ? 1 : 0) : '';
+  };
+  document.getElementById('manualCtl').innerHTML =
+    `<span>${esc(s.name)}</span>
+     from <input type="number" step="${unit === 'min' ? '0.1' : '1'}" id="manFrom" value="${s.intFrom ?? ''}" placeholder="${ph('from')}">
+     to <input type="number" step="${unit === 'min' ? '0.1' : '1'}" id="manTo" value="${s.intTo ?? ''}" placeholder="${ph('to')}">
+     <select id="manUnit" onchange="setIntUnitManual(this.value)">
+       <option value="C"${unit === 'C' ? ' selected' : ''}>°C</option>
+       <option value="min"${unit === 'min' ? ' selected' : ''}>min</option>
+     </select>
+     <button class="go" onclick="applyManual()">Apply limits</button>
+     <button class="iso-mini" onclick="detectInWindow()" title="Re-run the automatic detection inside the current limits">detect in window</button>
+     <button class="iso-mini" onclick="autoManual()">back to auto</button>`;
+
+  renderStepPicker(s);
+  renderManualChart(s);
+  renderManualStats(s);
+}
+
+// One chip per step of the run: click to feed that step to the analysis.
+function renderStepPicker(s) {
+  const box = document.getElementById('manualSteps');
+  if (!box) return;
+  if (!s.steps || s.steps.length < 2) {
+    box.innerHTML = s.steps && s.steps.length === 1
+      ? '<span class="man-hint">single step run</span>' : '';
+    return;
+  }
+  const label = { heat: '↗ heat', cool: '↘ cool', iso: '→ hold' };
+  box.innerHTML = '<span class="man-hint">steps</span>' + s.steps.map((st, k) => {
+    const active = k === s.segIndex;
+    const rate = st.rate != null && isFinite(st.rate) ? `${Math.abs(st.rate).toFixed(1)} K/min` : '';
+    return `<button class="step-chip${active ? ' active' : ''} k-${st.kind}"
+      onclick="useStep(${k})" title="${st.T0.toFixed(0)} → ${st.T1.toFixed(0)} °C${rate ? ' · ' + rate : ''}${st.dtMin != null ? ' · ' + st.dtMin.toFixed(1) + ' min' : ''}">
+      ${label[st.kind]} ${st.T0.toFixed(0)}→${st.T1.toFixed(0)}°C</button>`;
+  }).join('') +
+  `<button class="iso-mini" onclick="useWholeFile()" title="Analyse the entire file, without splitting it into steps">use whole file</button>`;
+}
+
+// switch the analysis onto another step of the same file
+function useStep(k) {
+  const s = manualScan(); if (!s) return;
+  if (!s.raw) { alert('This scan carries no full trace (loaded from an older session).'); return; }
+  applySegment(s, k);
+  markDirty();
+  renderScanList(); renderPeakPicker(); renderManual();
+  if (activeScans().filter(x => x.peakOk !== false).length >= 3) runAll();
+}
+
+function useWholeFile() {
+  const s = manualScan(); if (!s || !s.raw) return;
+  applyRawWindow(s, 0, s.raw.T.length - 1, null);
+  markDirty();
+  renderScanList(); renderPeakPicker(); renderManual();
+  if (activeScans().filter(x => x.peakOk !== false).length >= 3) runAll();
+}
+
+function showManual(i) { manualView.index = i; renderManual(); }
+function setManual(k, v) {
+  manualView[k] = v;
+  // a multi-step run revisits the same temperature on every step: viewing the whole file
+  // against temperature folds the curve back onto itself, which reads as missing data —
+  // default to time whenever "whole file" is chosen so the run stays unambiguous
+  if (k === 'scope' && v === 'file') manualView.xAxis = 'time';
+  delete axisState.manual;
+  renderManual();
+}
+
+function renderManualChart(s) {
+  const { ds, xArr } = traceDatasets(s, manualView);
+  const whole = manualView.scope === 'file' && canShowWholeFile(s);
+  const off = whole ? (s.segFrom || 0) : 0;
+  const o = baseOpts(manualView.xAxis === 'time' ? 'Time (min)' : 'Temperature (°C)',
+    manualView.yMode === 'deriv' ? (manualView.xAxis === 'time' ? 'dQ/dt slope (mW min⁻¹)' : 'dQ/dT slope (mW °C⁻¹)')
+      : manualView.yMode === 'sub' ? 'Heat flow − baseline (mW)' : 'Heat flow (mW)');
+  o.plugins.legend.labels.filter = it => !it.text.startsWith('_');
+  o.plugins.legend.labels.boxWidth = 9;
+  if (manualView.zoom) {
+    const pr = peakIndexRange(s);
+    const a = xArr[pr.i0 + off], b = xArr[pr.i1 + off];
+    if (a != null && b != null) {
+      const pad = Math.abs(b - a) * 0.25 || 1;
+      o.scales.x.min = Math.min(a, b) - pad;
+      o.scales.x.max = Math.max(a, b) + pad;
+    }
+  }
+  mkChart('manual', 'manualChart', { type: 'line', data: { datasets: ds }, options: o },
+    'Manual DSC — ' + s.name);
+}
+
+function renderManualStats(s) {
+  const box = document.getElementById('manualStats');
+  const m = s.meta || {};
+  const unit = s.intUnit || 'C';
+  const a = s.intAuto || {};
+  const rng = unit === 'min'
+    ? (isFinite(a.fromMin) ? `${a.fromMin.toFixed(1)}–${a.toMin.toFixed(1)} min` : '—')
+    : (isFinite(a.from) ? `${a.from.toFixed(1)}–${a.to.toFixed(1)} °C` : '—');
+  const nStep = s.steps ? s.steps.length : 1;
+  const cover = (s.raw && s.raw.T.length) ? Math.round(100 * s.T.length / s.raw.T.length) : 100;
+  box.innerHTML =
+    `<span>state <b class="${s.peakOk === false ? 'warn' : 'ok'}">${s.peakOk === false ? '⚠ no peak' : '✓ integrated'}</b></span>
+     <span>file <b>${s.raw ? s.raw.T.length : s.T.length} pt in ${nStep} step${nStep > 1 ? 's' : ''}</b></span>
+     <span>analysed <b>${s.T.length} pt (${cover}%)</b>${nStep > 1 ? ` · step ${(s.segIndex ?? 0) + 1}/${nStep}` : ''}</span>
+     <span>limits <b>${(s.intFrom != null || s.intTo != null) ? 'manual' : 'automatic'}</b></span>
+     <span>window <b>${rng}</b></span>
+     <span>integral <b>${m.area != null ? m.area.toFixed(2) + ' mJ' : '—'}</b></span>
+     <span>normalized <b>${(m.area != null && s.mass > 0) ? (m.area / s.mass).toFixed(2) + ' J g⁻¹' : '—'}</b></span>
+     <span>peak <b>${m.Tpeak != null ? m.Tpeak.toFixed(2) + ' °C' : '—'}</b></span>
+     <span>β <b>${s.beta ?? '?'} K min⁻¹</b></span>
+     ${s.peakError ? `<span class="warn">${esc(s.peakError)}</span>` : ''}`;
+}
+
+function setIntUnitManual(u) {
+  const s = manualScan(); if (!s) return;
+  setIntUnit(uploadedScans.indexOf(s), u);
+  renderManual();
+}
+
+function applyManual() {
+  const s = manualScan(); if (!s) return;
+  const f = document.getElementById('manFrom').value;
+  const t = document.getElementById('manTo').value;
+  const from = f === '' ? null : +f, to = t === '' ? null : +t;
+
+  // limits picked off the whole-file view may fall outside the segment under analysis:
+  // move the analysis onto the step that contains them instead of clamping the values
+  if (manualView.scope === 'file' && s.raw && (from != null || to != null)) {
+    const k = stepContaining(s, from, to);
+    if (k != null && k !== s.segIndex) applySegment(s, k, true);
+  }
+  s.intFrom = from;
+  s.intTo = to;
+  markDirty();
+  applyIntegration(s);
+  if (s.peakOk) showParseError(null);
+  renderScanList(); renderPeakPicker(); renderManual();
+  if (activeScans().filter(x => x.peakOk !== false).length >= 3) runAll();
+}
+
+// Which step of the run contains the requested limits (null when they already fall inside the
+// analysed segment, or when no step matches). NOTE: on a multi-step run the same temperature
+// recurs in several steps, so this is unambiguous only when the limits are given in minutes;
+// in °C the step is changed only if the values fall outside the analysed segment altogether.
+function stepContaining(s, from, to) {
+  if (!s.raw || !s.steps) return null;
+  const unit = s.intUnit || 'C';
+  const axis = unit === 'min' ? minutesAxis(s.raw.t || s.raw.T) : s.raw.T;
+  const inSeg = v => {
+    if (v == null || !isFinite(v)) return true;
+    const a = axis[s.segFrom || 0], b = axis[s.segTo || axis.length - 1];
+    return v >= Math.min(a, b) - 1e-9 && v <= Math.max(a, b) + 1e-9;
+  };
+  if (inSeg(from) && inSeg(to)) return null;                 // nothing to change
+  let best = null, bestScore = -1;
+  s.steps.forEach((st, k) => {
+    const a = axis[st.i0], b = axis[st.i1];
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    let score = 0;
+    [from, to].forEach(v => { if (v != null && isFinite(v) && v >= lo && v <= hi) score++; });
+    if (score > bestScore) { bestScore = score; best = k; }
+  });
+  return bestScore > 0 ? best : null;
+}
+
+function autoManual() {
+  const s = manualScan(); if (!s) return;
+  s.intFrom = s.intTo = null;
+  markDirty();
+  applyIntegration(s);
+  renderScanList(); renderPeakPicker(); renderManual();
+  if (s.peakOk && activeScans().filter(x => x.peakOk !== false).length >= 3) runAll();
+}
+
+// Re-run onset/endset detection restricted to the window currently set. Very low heating
+// rates give shallow peaks that the global search misses; narrowing the window first makes
+// the same prominence criterion find them.
+function detectInWindow() {
+  const s = manualScan(); if (!s) return;
+  const { i0, i1 } = peakIndexRange(s);   // indices inside the analysed segment
+  if (i1 - i0 < 10) { alert('The window is too narrow to search inside it.'); return; }
+  const sub = { T: s.T.slice(i0, i1 + 1), t: s.t.slice(i0, i1 + 1), hf: s.hf.slice(i0, i1 + 1) };
+  let res = null;
+  try { res = alphaFromHeatFlow(sub.hf, sub.t, sub.T); }
+  catch (e) { alert('No peak found inside the window: ' + e.message); return; }
+  // map the onset/endset found in the sub-window back onto the full scan
+  const unit = s.intUnit || 'C';
+  s.intFrom = unit === 'min' ? +((s.t[i0 + nearestIndex(sub.T, res.Tonset)] - s.t[0]) / 60).toFixed(2) : +res.Tonset.toFixed(1);
+  s.intTo   = unit === 'min' ? +((s.t[i0 + nearestIndex(sub.T, res.Tend)]   - s.t[0]) / 60).toFixed(2) : +res.Tend.toFixed(1);
+  markDirty();
+  applyIntegration(s);
+  showParseError(null);
+  renderScanList(); renderPeakPicker(); renderManual();
+  if (activeScans().filter(x => x.peakOk !== false).length >= 3) runAll();
+}
+
+// ══════════════════════════════════════════════
+// PEAK PICKER  (manual peak selection when detection fails)
+// ══════════════════════════════════════════════
+let peakPick = { index: null };
+
+function renderPeakPicker() {
+  const panel = document.getElementById('peakPanel');
+  const pending = uploadedScans.filter(s => s.peakOk === false);
+  if (!pending.length) { panel.style.display = 'none'; dc('peak'); peakPick.index = null; return; }
+
+  panel.style.display = '';
+  if (peakPick.index == null || uploadedScans[peakPick.index] == null ||
+      uploadedScans[peakPick.index].peakOk !== false) {
+    peakPick.index = uploadedScans.indexOf(pending[0]);
+  }
+  const s = uploadedScans[peakPick.index];
+
+  document.getElementById('peakMsg').textContent =
+    `${pending.length} scan${pending.length > 1 ? 's' : ''} without an automatic peak — pick the integration limits on the trace below`;
+
+  document.getElementById('peakTabs').innerHTML = uploadedScans.map((sc, i) => {
+    if (!sc.hfSource) return '';
+    const cls = sc.peakOk === false ? (i === peakPick.index ? 'peak-tab active' : 'peak-tab') : 'peak-tab done';
+    return `<button class="${cls}" onclick="showPeakScan(${i})" title="${esc(sc.name)}">${sc.peakOk === false ? '⚠' : '✓'} β=${sc.beta ?? '?'}</button>`;
+  }).join('');
+
+  const unit = s.intUnit || 'C';
+  const ax = unit === 'min' ? minutesAxis(s.t) : s.T;
+  const lo = Math.min(...ax), hi = Math.max(...ax);
+  document.getElementById('peakCtl').innerHTML =
+    `<span>${esc(s.name)}</span>
+     <span class="peak-hint">${s.peakError ? '· ' + esc(s.peakError) : ''}</span>
+     from <input type="number" step="${unit === 'min' ? '0.1' : '1'}" id="peakFrom" value="${s.intFrom ?? ''}" placeholder="${lo.toFixed(unit === 'min' ? 1 : 0)}">
+     to <input type="number" step="${unit === 'min' ? '0.1' : '1'}" id="peakTo" value="${s.intTo ?? ''}" placeholder="${hi.toFixed(unit === 'min' ? 1 : 0)}">
+     <select onchange="setIntUnit(${peakPick.index}, this.value); renderPeakPicker();">
+       <option value="C"${unit === 'C' ? ' selected' : ''}>°C</option>
+       <option value="min"${unit === 'min' ? ' selected' : ''}>min</option>
+     </select>
+     <button class="iso-mini" onclick="applyPeakPick()">Apply</button>
+     <button class="iso-mini" onclick="autoPeakPick()">Try auto</button>
+     <button class="iso-mini" onclick="openInManual()">🔬 open in Manual DSC</button>
+     <span class="peak-hint">the whole file is shown (every step, the analysed one in bold);
+       for very shallow peaks use the baseline-subtracted view in Manual DSC</span>`;
+
+  renderPeakChart(s);
+}
+
+function showPeakScan(i) { peakPick.index = i; renderPeakPicker(); }
+
+// The picker always shows the WHOLE trace (never zoomed): a shallow peak is easier to
+// spot against the full baseline, and the limits can be read straight off the axis.
+function renderPeakChart(s) {
+  const unit = s.intUnit || 'C';
+  const { ds } = traceDatasets(s, { xAxis: unit === 'min' ? 'time' : 'temp', yMode: 'raw', scope: 'file' });
+  const o = baseOpts(unit === 'min' ? 'Time (min)' : 'Temperature (°C)', 'Heat flow (mW)');
+  o.plugins.legend.display = false;
+  mkChart('peak', 'peakChart', { type: 'line', data: { datasets: ds }, options: o },
+    'Peak picker — ' + s.name);
+}
+
+function openInManual() {
+  manualView.index = peakPick.index;
+  manualView.yMode = 'sub';           // shallow peaks show up best against a flat baseline
+  setView('manual');
+}
+
+function applyPeakPick() {
+  const s = uploadedScans[peakPick.index]; if (!s) return;
+  const f = document.getElementById('peakFrom').value;
+  const t = document.getElementById('peakTo').value;
+  s.intFrom = f === '' ? null : +f;
+  s.intTo   = t === '' ? null : +t;
+  markDirty();
+  applyIntegration(s);
+  if (s.peakOk) showParseError(null);
+  renderScanList();
+  renderPeakPicker();
+  runAll();
+}
+
+function autoPeakPick() {
+  const s = uploadedScans[peakPick.index]; if (!s) return;
+  s.intFrom = s.intTo = null;
+  markDirty();
+  applyIntegration(s);
+  renderScanList();
+  renderPeakPicker();
+  if (s.peakOk) runAll();
+}
+
+// ══════════════════════════════════════════════
+// SESSION  (.pfvyaz — plain UTF-8 JSON)
+// ══════════════════════════════════════════════
+let sessionDirty = false;   // unsaved changes since the last save/open
+const PFVYAZ_MAGIC = 'pfvyaz';
+const PFVYAZ_FORMAT = 2;
+
+// numeric series are stored rounded: full double precision is pointless for DSC traces
+const packArr = a => (a || []).map(v => (v == null || !isFinite(v)) ? null : +(+v).toPrecision(6));
+
+// any edit that would be lost on close marks the session dirty
+function markDirty() {
+  sessionDirty = true;
+  const el = document.getElementById('dirtyDot');
+  if (el) el.style.display = 'inline';
+}
+function markClean() {
+  sessionDirty = false;
+  const el = document.getElementById('dirtyDot');
+  if (el) el.style.display = 'none';
+}
+
+// browser-level warning: the dialog text is fixed by the browser, only the flag matters
+window.addEventListener('beforeunload', e => {
+  if (!sessionDirty) return;
+  e.preventDefault();
+  e.returnValue = '';           // legacy browsers
+  return '';
+});
+
+// clear everything and start over
+function newSession() {
+  if (sessionDirty && !confirm('Unsaved changes will be lost. Start a new session?')) return;
+  uploadedScans = [];
+  lastResults = null; lastBetas = []; lastScans = []; lastIso = null;
+  isoSelected = null;
+  Object.keys(axisState).forEach(k => delete axisState[k]);
+  Object.keys(charts).forEach(k => dc(k));
+  ['intEditor', 'dscNotes', 'convNotes', 'isoPick', 'rawTabs', 'rawContents',
+   'resultsHead', 'resultsTbody', 'isoHead', 'isoTbody', 'phaseStrip', 'statusBar']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; });
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('placeholder').style.display = '';
+  peakPick.index = null;
+  manualView.index = 0;
+  renderScanList();
+  renderPeakPicker();
+  renderManual();
+  showParseError(null);
+  markClean();
+  flashMenu('🗑 Cleared');
+}
+
+function collectSession() {
+  const num = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  return {
+    magic: PFVYAZ_MAGIC,
+    format: PFVYAZ_FORMAT,
+    app: 'Vyazovkin Method',
+    version: APP_VERSION,
+    saved: new Date().toISOString(),
+    mode: currentMode,
+    params: {
+      dAlpha: num('dAlpha'), isoTmin: num('isoTmin'), isoTmax: num('isoTmax'),
+      dH: num('dH'), T0: num('T0'), Tend: num('Tend'),
+      b1: num('b1'), b2: num('b2'), b3: num('b3'), b4: num('b4'),
+      Ea_chem: num('Ea_chem'), Ea_diff: num('Ea_diff'),
+      alpha_gel: num('alpha_gel'), m_cat: num('m_cat'),
+      autoRun: document.getElementById('autoRun').checked
+    },
+    view: {
+      axisState: JSON.parse(JSON.stringify(axisState)),
+      isoSelected: isoSelected ? [...isoSelected] : null,
+      view: currentView
+    },
+    scans: uploadedScans.map(s => ({
+      name: s.name, beta: s.beta, betaAuto: s.betaAuto, betaFile: s.betaFile, mass: s.mass,
+      intFrom: s.intFrom, intTo: s.intTo, hfSource: s.hfSource, tSynthetic: s.tSynthetic,
+      peakOk: s.peakOk, massSource: s.massSource,
+      enabled: s.enabled !== false, intUnit: s.intUnit || 'C', colorIdx: s.colorIdx,
+      nRows: s.nRows, meta: s.meta,
+      // the whole run is stored once; the analysed window is rebuilt from it on load
+      raw: s.raw ? { T: packArr(s.raw.T), t: packArr(s.raw.t), hf: packArr(s.raw.hf) } : null,
+      segFrom: s.segFrom, segTo: s.segTo, segIndex: s.segIndex,
+      T: s.raw ? null : packArr(s.T), t: s.raw ? null : packArr(s.t),
+      hf: s.raw ? null : packArr(s.hf), alpha: s.raw ? null : packArr(s.alpha)
+    }))
+  };
+}
+
+function sessionFileName() {
+  const base = commonPrefix(uploadedScans.map(s => s.name.replace(/\.[a-z0-9]+$/i, ''))) || 'vyazovkin_session';
+  const stamp = new Date().toISOString().slice(0, 10);
+  return `${base.replace(/[^\w.\- ]+/g, '_').trim() || 'vyazovkin_session'}_${stamp}.pfvyaz`;
+}
+
+async function saveSession() {
+  if (currentMode === 'file' && !uploadedScans.length) { alert('Nothing to save: load some DSC scans first.'); return; }
+  const text = JSON.stringify(collectSession(), null, 1);
+  const name = sessionFileName();
+  // Chrome/Edge: let the user pick the destination folder; elsewhere fall back to a download
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: name,
+        types: [{ description: 'Vyazovkin session', accept: { 'application/x-pfvyaz': ['.pfvyaz'] } }]
+      });
+      const w = await handle.createWritable();
+      await w.write(new Blob([text], { type: 'application/x-pfvyaz' }));
+      await w.close();
+      markClean();
+      flashMenu('💾 Saved');
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;      // user cancelled
+      console.warn('showSaveFilePicker failed, falling back to download', e);
+    }
+  }
+  saveText(text, name, 'application/x-pfvyaz');
+  markClean();
+  flashMenu('💾 Downloaded');
+}
+
+function flashMenu(msg) {
+  const b = document.querySelector('.menu-btn');
+  if (!b) return;
+  const orig = b.innerHTML;
+  b.innerHTML = msg; b.style.color = 'var(--accent)';
+  setTimeout(() => { b.innerHTML = orig; b.style.color = ''; }, 1600);
+}
+
+function openSessionFile(evt) {
+  const f = evt.target.files && evt.target.files[0];
+  evt.target.value = '';
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try { loadSession(e.target.result); }
+    catch (err) { showParseError(`Session "${f.name}": ${err.message}`); alert('Session error: ' + err.message); }
+  };
+  r.readAsText(f);
+}
+
+function loadSession(text) {
+  let j;
+  try { j = JSON.parse(text); } catch (e) { throw new Error('not a valid .pfvyaz file (bad JSON)'); }
+  if (!j || j.magic !== PFVYAZ_MAGIC) throw new Error('not a .pfvyaz session file');
+  if (!(j.format <= PFVYAZ_FORMAT)) throw new Error(`session format ${j.format} is newer than this app (v${APP_VERSION})`);
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+  const p = j.params || {};
+  ['dAlpha','isoTmin','isoTmax','dH','T0','Tend','b1','b2','b3','b4','Ea_chem','Ea_diff','alpha_gel','m_cat']
+    .forEach(k => set(k, p[k]));
+  if (p.autoRun != null) document.getElementById('autoRun').checked = !!p.autoRun;
+
+  uploadedScans = (j.scans || []).map(normaliseSessionScan);
+  uploadedScans.forEach(s => scanColor(s));      // keep/assign a stable colour
+  const v = j.view || {};
+  Object.keys(axisState).forEach(k => delete axisState[k]);
+  Object.assign(axisState, v.axisState || {});
+  isoSelected = v.isoSelected ? new Set(v.isoSelected) : null;
+  if (v.view) setView(v.view);
+
+  setMode(j.mode === 'file' ? 'file' : 'sim');
+  renderScanList();
+  renderPeakPicker();
+  showParseError(null);
+  markClean();
+  flashMenu('📁 Loaded');
+  runAll();
+}
+
+// A session scan comes either with the full run (format ≥ 2) or with just the analysed
+// window (format 1). Either way the app ends up with T/t/hf/alpha for the window in use.
+function normaliseSessionScan(s) {
+  const sc = {
+    name: s.name, beta: s.beta, betaAuto: s.betaAuto, betaFile: s.betaFile, mass: s.mass,
+    intFrom: s.intFrom ?? null, intTo: s.intTo ?? null,
+    hfSource: !!s.hfSource, tSynthetic: !!s.tSynthetic,
+    nRows: s.nRows || (s.T || []).length,
+    meta: s.meta || { segment: '', source: 'session' },
+    intAuto: (s.meta && s.meta.peak) ? parsePeakRange(s.meta.peak) : null,
+    peakOk: s.peakOk !== false, massSource: s.massSource || null,
+    enabled: s.enabled !== false, intUnit: s.intUnit || 'C', colorIdx: s.colorIdx,
+    T: s.T || [], t: s.t || [], hf: s.hf || [], alpha: s.alpha || []
+  };
+  if (s.raw && s.raw.T && s.raw.T.length) {
+    sc.raw = { T: s.raw.T, t: s.raw.t || null, hf: s.raw.hf || null };
+    sc.steps = s.steps && s.steps.length ? s.steps : detectSteps(sc.raw.T, sc.raw.t);
+    sc.segIndex = s.segIndex ?? 0;
+    const i0 = s.segFrom ?? 0, i1 = s.segTo ?? (sc.raw.T.length - 1);
+    applyRawWindow(sc, i0, i1, sc.segIndex, true);          // keep the stored limits
+  }
+  return sc;
+}
+
+function parsePeakRange(str) {
+  const m = String(str).match(/(-?\d+(?:\.\d+)?)\s*[–-]\s*(-?\d+(?:\.\d+)?)/);
+  return m ? { from: +m[1], to: +m[2] } : null;
+}
+
+// ══════════════════════════════════════════════
+// RAW DATA
+// ══════════════════════════════════════════════
+function renderRawData(scans, betas) {
+  const td = document.getElementById('rawTabs'), cd = document.getElementById('rawContents');
+  td.innerHTML = ''; cd.innerHTML = '';
+  scans.forEach((s, i) => {
+    const tab = document.createElement('div');
+    tab.className = 'raw-tab' + (i === 0 ? ' active' : '');
+    tab.textContent = `β=${betas[i]}`;
+    tab.onclick = () => {
+      document.querySelectorAll('.raw-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.raw-content').forEach(c => c.classList.remove('visible'));
+      tab.classList.add('active');
+      document.getElementById(`rd${i}`).classList.add('visible');
+    };
+    td.appendChild(tab);
+    const div = document.createElement('div'); div.id = `rd${i}`; div.className = 'raw-content' + (i === 0 ? ' visible' : '');
+    const step = Math.max(1, Math.floor(s.T.length / 26));
+    let h = `<table><thead><tr><th>#</th><th>T (°C)</th><th>t (s)</th><th>α</th><th>dH/dt</th></tr></thead><tbody>`;
+    for (let j = 0; j < s.T.length; j += step)
+      h += `<tr><td class="td-n">${j}</td><td class="td-n">${s.T[j].toFixed(2)}</td><td class="td-n">${(s.t[j] ?? 0).toFixed(1)}</td><td class="td-ea">${s.alpha[j].toFixed(4)}</td><td class="td-n">${(s.hf[j] || 0).toFixed(4)}</td></tr>`;
+    h += '</tbody></table>'; div.innerHTML = h; cd.appendChild(div);
+  });
+}
+
+function renderPhaseStrip(results, gel) {
+  const strip = document.getElementById('phaseStrip');
+  const avg = (results.reduce((s, r) => s + r.Ea_vyaz, 0) / results.length).toFixed(1);
+  const phases = [
+    { range: '0–0.10', label: 'Initiation', color: '#3457d5' },
+    { range: '0.10–0.30', label: 'Autocatalysis', color: '#0d8a70' },
+    { range: `0.30–${gel.toFixed(2)}`, label: 'Chemical control', color: '#2f9e44' },
+    { range: `${gel.toFixed(2)}–1.0`, label: 'Diffusion control', color: '#cf4b18' }
+  ];
+  strip.innerHTML = phases.map(p => `<div class="phase-pill"><div class="dot" style="background:${p.color}"></div>
+    <span style="color:${p.color};font-family:var(--mono);font-size:10px">${p.range}</span>
+    <span>${p.label}</span></div>`).join('')
+    + `<div class="phase-pill" style="margin-left:auto">
+       <span style="color:var(--muted);font-family:var(--mono);font-size:10px">⌀ Eα =</span>
+       <span style="color:var(--accent);font-family:var(--mono);font-weight:600">${avg} kJ mol⁻¹</span></div>`;
+}
+
+function renderStatus(results, betas, dA) {
+  const minE = Math.min(...results.map(r => r.Ea_vyaz)).toFixed(1);
+  const maxE = Math.max(...results.map(r => r.Ea_vyaz)).toFixed(1);
+  document.getElementById('statusBar').innerHTML =
+    `<span>v</span> ${APP_VERSION} &nbsp;|&nbsp;
+     <span>Mode</span> ${currentMode === 'file' ? 'Real files' : 'Simulation'} &nbsp;|&nbsp;
+     <span>scans</span> ${betas.length} &nbsp;|&nbsp;
+     <span>β</span> ${betas.join(', ')} K min⁻¹ &nbsp;|&nbsp;
+     <span>α points</span> ${results.length} (Δα=${dA}) &nbsp;|&nbsp;
+     <span>Eα range</span> ${minE}–${maxE} kJ mol⁻¹` +
+    (results.some(r => r.unbounded)
+      ? ` &nbsp;|&nbsp; <span style="color:var(--accent2)">⚠ ${results.filter(r => r.unbounded).length} points with no Φ minimum</span>` : '');
+}
+
+window.addEventListener('load', () => setTimeout(runAll, 150));
+</script>
+</body>
+</html>
